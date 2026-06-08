@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>健身记录</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- 导航 -->
+        <nav class="nav">
+            <button class="nav-btn active" data-page="training">今日训练</button>
+            <button class="nav-btn" data-page="exercises">动作管理</button>
+            <button class="nav-btn" data-page="statistics">统计分析</button>
+        </nav>
+
+        <!-- 今日训练页面 -->
+        <div id="page-training" class="page active">
+            <div class="header">
+                <h1>健身记录</h1>
+                <div class="date-display">
+                    <label>日期:</label>
+                    <input type="date" id="training-date" />
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>选择今日训练计划</h2>
+                <div id="groups-container" class="groups-grid">
+                    <!-- 动态加载动作组 -->
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>当天已记录训练</h2>
+                <div id="date-sessions-container" class="groups-grid">
+                    <!-- 动态加载某天已保存训练 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 训练详情页面 (点击动作组后显示) -->
+        <div id="page-training-detail" class="page">
+            <div class="header">
+                <button id="back-to-groups" class="back-btn">← 返回</button>
+                <h1 id="group-name">胸肌训练</h1>
+                <div class="date-display">
+                    <input type="date" id="detail-date" />
+                    <label>训练时长:</label>
+                    <input type="number" inputmode="numeric" id="training-duration" value="40" min="1" />
+                    <span class="unit-label-inline">分钟</span>
+                </div>
+            </div>
+
+            <div id="exercises-list" class="exercises-list">
+                <!-- 动态加载动作 -->
+            </div>
+
+            <div class="actions">
+                <button id="cancel-session" class="btn btn-secondary">取消</button>
+                <button id="save-session" class="btn btn-primary">保存本次训练</button>
+            </div>
+        </div>
+
+        <!-- 动作管理页面 -->
+        <div id="page-exercises" class="page">
+            <div class="header">
+                <h1>动作管理</h1>
+                <button id="add-exercise-btn" class="btn btn-primary">添加动作</button>
+            </div>
+
+            <div class="section">
+                <h2>动作库</h2>
+                <div id="exercises-table-container"></div>
+            </div>
+
+            <div class="section">
+                <h2>动作组</h2>
+                <div id="groups-table-container"></div>
+                <button id="add-group-btn" class="btn btn-primary">添加动作组</button>
+            </div>
+        </div>
+
+        <!-- 统计分析页面 -->
+        <div id="page-statistics" class="page">
+            <div class="header">
+                <h1>📊 统计分析</h1>
+                <div class="date-display">
+                    <label>统计周期:</label>
+                    <select id="stats-period">
+                        <option value="7">最近7天</option>
+                        <option value="30" selected>最近30天</option>
+                        <option value="90">最近90天</option>
+                    </select>
+                    <label>指数分位:</label>
+                    <select id="stats-percentile">
+                        <option value="95" selected>P95</option>
+                        <option value="99">P99</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="stats-filter">
+                <h2>筛选条件</h2>
+                <select id="stats-type">
+                    <option value="overview">总览统计</option>
+                    <option value="muscle">按肌肉群筛选</option>
+                    <option value="exercise">按动作筛选</option>
+                </select>
+
+                <select id="stats-target">
+                    <option value="">全部</option>
+                    <!-- 动态加载选项 -->
+                </select>
+            </div>
+
+            <div class="stats-dashboard">
+                <!-- 动态加载总体统计和最佳表现 -->
+            </div>
+
+            <div id="exercise-trend-section" class="stats-section" style="display: none;">
+                <div class="section-title-row">
+                    <h2>📈 动作趋势</h2>
+                    <select id="exercise-trend-mode">
+                        <option value="best" selected>最佳表现</option>
+                        <option value="total">总容量</option>
+                    </select>
+                </div>
+                <div id="volume-chart" class="chart-container-large">
+                    <!-- 动作趋势图 -->
+                </div>
+            </div>
+
+            <div class="stats-section">
+                <h2>📅 训练日历</h2>
+                <div id="training-calendar" class="calendar-view">
+                    <!-- 训练日历 -->
+                </div>
+            </div>
+
+            <div class="stats-section">
+                <h2>📋 当天组明细</h2>
+                <div id="day-records" class="day-records">
+                    <p style="color: #6c757d;">点击训练日历中的日期查看当天组数</p>
+                </div>
+            </div>
+
+            <div class="stats-actions">
+                <button class="btn btn-primary" onclick="exportStatsReport()">📥 导出统计报告</button>
+                <button class="btn btn-secondary" onclick="refreshStats()">🔄 刷新统计</button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- 添加动作弹窗 -->
+    <div id="exercise-modal" class="modal">
+        <div class="modal-content">
+            <h2 id="exercise-modal-title">添加动作</h2>
+            <form id="exercise-form">
+                <div class="form-group">
+                    <label>动作名称</label>
+                    <input type="text" id="exercise-name" required />
+                </div>
+                <div class="form-group">
+                    <label>训练肌肉部位</label>
+                    <input type="text" id="exercise-muscle" required placeholder="如：胸肌、背部、腿部" />
+                </div>
+                <div class="form-group">
+                    <label>单位类型</label>
+                    <select id="exercise-unit" required>
+                        <option value="kg">重量 (kg)</option>
+                        <option value="reps">次数 (次)</option>
+                        <option value="duration">持续时间 (秒)</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('exercise-modal')">取消</button>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 添加动作组弹窗 -->
+    <div id="group-modal" class="modal">
+        <div class="modal-content">
+            <h2 id="group-modal-title">添加动作组</h2>
+            <form id="group-form">
+                <div class="form-group">
+                    <label>动作组名称</label>
+                    <input type="text" id="group-form-name" required placeholder="如：胸肌训练" />
+                </div>
+                <div class="form-group">
+                    <label>选择动作</label>
+                    <div id="exercise-checkboxes" class="checkbox-list">
+                        <!-- 动态加载动作复选框 -->
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('group-modal')">取消</button>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+    <script src="stats.js"></script>
+</body>
+</html>

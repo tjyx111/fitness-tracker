@@ -1,0 +1,16 @@
+# Build artifacts
+/fitness-tracker
+/backend/fitness-tracker
+/dist/
+
+# Runtime files
+*.log
+*.pid
+/data/
+
+# Local tool state
+/.claude/
+
+# OS/editor noise
+.DS_Store
+*.swp

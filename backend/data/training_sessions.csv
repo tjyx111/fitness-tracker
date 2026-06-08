@@ -1,0 +1,16 @@
+sessionId(会话编号),groupId(动作组编号),date(训练日期),status(状态),durationMinutes(训练时长分钟)
+4,4,2026-05-25,completed,40
+5,1,2026-05-25,completed,40
+6,2,2026-05-25,completed,40
+7,3,2026-05-25,completed,40
+1,1,2026-05-29,completed,40
+3,3,2026-05-29,completed,40
+9,2,2026-05-29,completed,40
+10,1,2026-06-02,completed,40
+11,4,2026-06-02,completed,40
+13,3,2026-06-02,completed,40
+14,5,2026-06-02,completed,40
+15,2,2026-06-02,completed,40
+16,2,2026-06-04,completed,40
+17,3,2026-06-04,completed,40
+18,5,2026-06-04,completed,40

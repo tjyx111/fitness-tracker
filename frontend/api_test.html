@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>API测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #5568d3;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            max-height: 400px;
+        }
+        .success { color: #28a745; font-weight: 600; }
+        .error { color: #dc3545; font-weight: 600; }
+    </style>
+</head>
+<body>
+    <h1>🔍 健身追踪器 API 测试</h1>
+
+    <div class="test-section">
+        <h2>1. 测试获取动作组</h2>
+        <button onclick="testGroups()">测试 /api/groups</button>
+        <pre id="groups-result">点击按钮测试...</pre>
+    </div>
+
+    <div class="test-section">
+        <h2>2. 测试获取动作</h2>
+        <button onclick="testExercises()">测试 /api/exercises</button>
+        <pre id="exercises-result">点击按钮测试...</pre>
+    </div>
+
+    <div class="test-section">
+        <h2>3. 测试获取上次记录</h2>
+        <button onclick="testLastRecord()">测试 /api/groups/1/last-record</button>
+        <pre id="lastrecord-result">点击按钮测试...</pre>
+    </div>
+
+    <div class="test-section">
+        <h2>4. 前端渲染测试</h2>
+        <button onclick="testRender()">测试渲染动作组卡片</button>
+        <div id="render-container" style="margin-top: 15px;"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8080/api';
+        let state = { groups: [], exercises: [] };
+
+        async function testGroups() {
+            try {
+                const res = await fetch(`${API_BASE}/groups`);
+                const data = await res.json();
+                document.getElementById('groups-result').innerHTML =
+                    `<span class="success">✅ 成功获取 ${data.length} 个动作组</span>\n` +
+                    JSON.stringify(data, null, 2);
+                state.groups = data;
+            } catch (err) {
+                document.getElementById('groups-result').innerHTML =
+                    `<span class="error">❌ 错误: ${err.message}</span>`;
+            }
+        }
+
+        async function testExercises() {
+            try {
+                const res = await fetch(`${API_BASE}/exercises`);
+                const data = await res.json();
+                document.getElementById('exercises-result').innerHTML =
+                    `<span class="success">✅ 成功获取 ${data.length} 个动作</span>\n` +
+                    JSON.stringify(data, null, 2);
+                state.exercises = data;
+            } catch (err) {
+                document.getElementById('exercises-result').innerHTML =
+                    `<span class="error">❌ 错误: ${err.message}</span>`;
+            }
+        }
+
+        async function testLastRecord() {
+            try {
+                const res = await fetch(`${API_BASE}/groups/1/last-record`);
+                const data = await res.json();
+                document.getElementById('lastrecord-result').innerHTML =
+                    `<span class="success">✅ 成功获取上次记录</span>\n` +
+                    JSON.stringify(data, null, 2);
+            } catch (err) {
+                document.getElementById('lastrecord-result').innerHTML =
+                    `<span class="error">❌ 错误: ${err.message}</span>`;
+            }
+        }
+
+        async function testRender() {
+            // 先加载数据
+            await testGroups();
+
+            const container = document.getElementById('render-container');
+            const validGroups = state.groups.filter(group => group.id > 0 && group.exercises);
+
+            if (validGroups.length === 0) {
+                container.innerHTML = '<span class="error">❌ 没有有效的动作组数据</span>';
+                return;
+            }
+
+            container.innerHTML = validGroups.map(group => `
+                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                       color: white; padding: 20px; border-radius: 10px; margin: 10px 0;
+                       cursor: pointer; display: inline-block; min-width: 200px;">
+                    <h3 style="margin: 0 0 10px 0; font-size: 18px;">${group.name}</h3>
+                    <p style="margin: 0; opacity: 0.9;">${group.exercises.length} 个动作</p>
+                </div>
+            `).join('');
+
+            container.innerHTML += `<p style="margin-top: 15px;" class="success">✅ 成功渲染 ${validGroups.length} 个动作组卡片</p>`;
+        }
+
+        // 页面加载时自动测试
+        window.addEventListener('load', () => {
+            console.log('页面加载完成，开始自动测试...');
+            testGroups();
+        });
+    </script>
+</body>
+</html>
