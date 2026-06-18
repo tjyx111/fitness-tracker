@@ -546,6 +546,11 @@ body {
     cursor: pointer;
 }
 
+.empty-hint {
+    color: #6c757d;
+    margin: 0;
+}
+
 .form-actions {
     display: flex;
     justify-content: flex-end;

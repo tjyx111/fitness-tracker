@@ -178,6 +178,7 @@ async function saveExercise(e) {
     const name = document.getElementById('exercise-name').value.trim();
     const muscle = document.getElementById('exercise-muscle').value.trim();
     const unit = document.getElementById('exercise-unit').value;
+    const selectedGroupIds = getSelectedExerciseGroupIds();
     const isEditing = state.editingExerciseId !== null;
     const payload = { name, muscleGroup: muscle, unit };
 
@@ -194,6 +195,9 @@ async function saveExercise(e) {
         if (!res.ok) {
             throw new Error(await res.text());
         }
+        const savedExercise = await res.json();
+
+        await syncExerciseGroupMembership(savedExercise.id, selectedGroupIds);
 
         closeModal('exercise-modal');
         document.getElementById('exercise-form').reset();
@@ -208,6 +212,44 @@ async function saveExercise(e) {
     }
 }
 
+async function syncExerciseGroupMembership(exerciseId, selectedGroupIds) {
+    const selected = new Set(selectedGroupIds.map(id => parseInt(id)));
+    const updates = [];
+
+    for (const group of state.groups.filter(group => group.id > 0)) {
+        const currentIds = Array.isArray(group.exerciseIds)
+            ? group.exerciseIds.map(id => parseInt(id)).filter(id => id > 0)
+            : [];
+        const hasExercise = currentIds.includes(exerciseId);
+        const shouldHaveExercise = selected.has(group.id);
+
+        if (hasExercise === shouldHaveExercise) {
+            continue;
+        }
+
+        const nextIds = shouldHaveExercise
+            ? [...currentIds, exerciseId]
+            : currentIds.filter(id => id !== exerciseId);
+
+        const uniqueIds = [...new Set(nextIds)];
+        updates.push(fetch(`${API_BASE}/groups`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                id: group.id,
+                name: group.name,
+                exerciseIds: uniqueIds
+            })
+        }).then(async res => {
+            if (!res.ok) {
+                throw new Error(await res.text());
+            }
+        }));
+    }
+
+    await Promise.all(updates);
+}
+
 async function saveGroup(e) {
     e.preventDefault();
     const name = document.getElementById('group-form-name').value.trim();
@@ -216,8 +258,21 @@ async function saveGroup(e) {
     const isEditing = state.editingGroupId !== null;
     const payload = { name, exerciseIds };
 
+    if (!name) {
+        alert('请输入动作组名称');
+        return;
+    }
+
     if (isEditing) {
         payload.id = state.editingGroupId;
+    }
+
+    if (hasDuplicateGroupName(name, isEditing ? state.editingGroupId : null)) {
+        const action = isEditing ? '保存' : '新增';
+        const confirmed = confirm(`动作组“${name}”已经存在，仍要${action}同名动作组吗？`);
+        if (!confirmed) {
+            return;
+        }
     }
 
     try {
@@ -239,6 +294,20 @@ async function saveGroup(e) {
         console.error('Failed to save group:', err);
         alert('保存动作组失败，请重试');
     }
+}
+
+function hasDuplicateGroupName(name, currentGroupId = null) {
+    const normalizedName = normalizeGroupName(name);
+    return state.groups.some(group => {
+        if (!group || group.id <= 0 || group.id === currentGroupId) {
+            return false;
+        }
+        return normalizeGroupName(group.name) === normalizedName;
+    });
+}
+
+function normalizeGroupName(name) {
+    return (name || '').trim();
 }
 
 async function deleteExercise(id) {
@@ -749,6 +818,7 @@ function openAddExerciseModal() {
     state.editingExerciseId = null;
     document.getElementById('exercise-modal-title').textContent = '添加动作';
     document.getElementById('exercise-form').reset();
+    loadExerciseGroupCheckboxes([]);
     openModal('exercise-modal');
 }
 
@@ -762,6 +832,10 @@ function editExercise(id) {
     document.getElementById('exercise-name').value = exercise.name;
     document.getElementById('exercise-muscle').value = exercise.muscleGroup;
     document.getElementById('exercise-unit').value = exercise.unit || 'kg';
+    const selectedGroupIds = state.groups
+        .filter(group => Array.isArray(group.exerciseIds) && group.exerciseIds.includes(id))
+        .map(group => group.id);
+    loadExerciseGroupCheckboxes(selectedGroupIds);
     openModal('exercise-modal');
 }
 
@@ -850,6 +924,29 @@ function loadExerciseCheckboxes(selectedIds = []) {
             ${ex.name} (${ex.muscleGroup})
         </label>
     `).join('');
+}
+
+function loadExerciseGroupCheckboxes(selectedIds = []) {
+    const container = document.getElementById('exercise-group-checkboxes');
+    const selected = new Set(selectedIds.map(id => parseInt(id)));
+    const validGroups = state.groups.filter(group => group.id > 0);
+
+    if (validGroups.length === 0) {
+        container.innerHTML = '<p class="empty-hint">暂无动作组</p>';
+        return;
+    }
+
+    container.innerHTML = validGroups.map(group => `
+        <label>
+            <input type="checkbox" name="exercise-groups" value="${group.id}" ${selected.has(group.id) ? 'checked' : ''}>
+            ${group.name}
+        </label>
+    `).join('');
+}
+
+function getSelectedExerciseGroupIds() {
+    const checkboxes = document.querySelectorAll('#exercise-group-checkboxes input:checked');
+    return Array.from(checkboxes).map(cb => parseInt(cb.value));
 }
 
 // ========== 统计筛选功能 ==========
