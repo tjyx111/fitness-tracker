@@ -6,149 +6,59 @@ import (
 	"strconv"
 )
 
-// WeightRecordsHandler 体重记录处理器
-type WeightRecordsHandler struct {
-	weightFile string
+// WeightRecordsHandler keeps the existing call sites small while all weight
+// records are persisted by the shared SQLite connection.
+type WeightRecordsHandler struct{ store *SQLiteHandler }
+
+func NewWeightRecordsHandler(store *SQLiteHandler) *WeightRecordsHandler {
+	return &WeightRecordsHandler{store: store}
 }
 
-func NewWeightRecordsHandler(dataDir string) *WeightRecordsHandler {
-	return &WeightRecordsHandler{
-		weightFile: dataDir + "/weight_records.csv",
-	}
-}
-
-// LoadWeightRecords 加载体重记录
 func (w *WeightRecordsHandler) LoadWeightRecords() ([]WeightRecord, error) {
-	file, err := os.Open(w.weightFile)
+	return w.store.LoadWeightRecords()
+}
+
+func (w *WeightRecordsHandler) AddWeightRecord(record *WeightRecord) error {
+	return w.store.AddWeightRecord(record)
+}
+
+func (w *WeightRecordsHandler) GetLatestWeight() (float64, error) {
+	return w.store.GetLatestWeight()
+}
+
+// loadLegacyWeightRecords is used only during the one-time CSV migration.
+func loadLegacyWeightRecords(path string) ([]WeightRecord, error) {
+	file, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// 创建文件并写入标题
-			return w.createWeightFile()
+			return []WeightRecord{}, nil
 		}
 		return nil, err
 	}
 	defer file.Close()
-
-	reader := csv.NewReader(file)
-	records, err := reader.ReadAll()
+	rows, err := csv.NewReader(file).ReadAll()
 	if err != nil {
 		return nil, err
 	}
-
-	var weightRecords []WeightRecord
-	for i, record := range records {
-		if i == 0 {
-			continue // 跳过标题行
-		}
-		if len(record) < 3 {
+	result := []WeightRecord{}
+	for i, row := range rows {
+		if i == 0 || len(row) < 3 {
 			continue
 		}
-
-		id, _ := strconv.Atoi(record[0])
-		weight, _ := strconv.ParseFloat(record[2], 64)
+		id, idErr := strconv.Atoi(row[0])
+		weight, weightErr := strconv.ParseFloat(row[2], 64)
+		if idErr != nil || weightErr != nil || weight <= 0 {
+			continue
+		}
 		bodyFat := 0.0
-		if len(record) > 3 {
-			bodyFat, _ = strconv.ParseFloat(record[3], 64)
+		if len(row) > 3 {
+			bodyFat, _ = strconv.ParseFloat(row[3], 64)
 		}
 		note := ""
-		if len(record) > 4 {
-			note = record[4]
+		if len(row) > 4 {
+			note = row[4]
 		}
-
-		weightRecords = append(weightRecords, WeightRecord{
-			ID:      id,
-			Date:    record[1],
-			Weight:  weight,
-			BodyFat: bodyFat,
-			Note:    note,
-		})
+		result = append(result, WeightRecord{ID: id, Date: row[1], Weight: weight, BodyFat: bodyFat, Note: note})
 	}
-
-	return weightRecords, nil
-}
-
-// SaveWeightRecords 保存体重记录
-func (w *WeightRecordsHandler) SaveWeightRecords(records []WeightRecord) error {
-	file, err := os.Create(w.weightFile)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	writer := csv.NewWriter(file)
-	defer writer.Flush()
-
-	// 写入标题
-	writer.Write([]string{"id(编号)", "date(日期)", "weight(体重kg)", "bodyFat(体脂率%)", "note(备注)"})
-
-	// 写入数据
-	for _, r := range records {
-		writer.Write([]string{
-			strconv.Itoa(r.ID),
-			r.Date,
-			strconv.FormatFloat(r.Weight, 'f', 2, 64),
-			strconv.FormatFloat(r.BodyFat, 'f', 2, 64),
-			r.Note,
-		})
-	}
-
-	return nil
-}
-
-// AddWeightRecord 添加体重记录
-func (w *WeightRecordsHandler) AddWeightRecord(record WeightRecord) error {
-	records, err := w.LoadWeightRecords()
-	if err != nil {
-		return err
-	}
-
-	// 生成新ID
-	maxID := 0
-	for _, r := range records {
-		if r.ID > maxID {
-			maxID = r.ID
-		}
-	}
-	record.ID = maxID + 1
-
-	records = append(records, record)
-	return w.SaveWeightRecords(records)
-}
-
-// GetLatestWeight 获取最新体重
-func (w *WeightRecordsHandler) GetLatestWeight() (float64, error) {
-	records, err := w.LoadWeightRecords()
-	if err != nil {
-		return 0, err
-	}
-
-	if len(records) == 0 {
-		return 0, nil
-	}
-
-	// 按日期排序，返回最新的
-	latest := records[0]
-	for _, r := range records {
-		if r.Date > latest.Date {
-			latest = r
-		}
-	}
-
-	return latest.Weight, nil
-}
-
-func (w *WeightRecordsHandler) createWeightFile() ([]WeightRecord, error) {
-	file, err := os.Create(w.weightFile)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	writer := csv.NewWriter(file)
-	defer writer.Flush()
-
-	// 写入标题
-	writer.Write([]string{"id(编号)", "date(日期)", "weight(体重kg)", "bodyFat(体脂率%)", "note(备注)"})
-
-	return []WeightRecord{}, nil
+	return result, nil
 }

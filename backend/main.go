@@ -27,7 +27,11 @@ func main() {
 	fmt.Printf("Data directory: %s\n", absPath)
 
 	// 创建服务器
-	server := NewServer(dataDir)
+	server, err := NewServer(dataDir)
+	if err != nil {
+		log.Fatalf("initialize SQLite storage: %v", err)
+	}
+	defer server.csv.Close()
 
 	// 设置路由
 	http.HandleFunc("/api/exercises", server.handleExercises)
@@ -66,6 +70,9 @@ func main() {
 	http.HandleFunc("/api/weight", server.handleWeightRecords)
 	http.HandleFunc("/api/weight/latest", server.handleWeightLatest)
 
+	// 数据库同步（需要通过 SYNC_TOKEN 显式启用）
+	http.HandleFunc("/api/sync/database", server.handleDatabaseSync)
+
 	// 静态文件服务（前端）
 	http.Handle("/", http.FileServer(frontendFileSystem()))
 
@@ -95,6 +102,7 @@ func main() {
 	fmt.Println("  GET    /api/weight - 获取体重记录")
 	fmt.Println("  POST   /api/weight - 添加体重记录")
 	fmt.Println("  GET    /api/weight/latest - 获取最新体重")
+	fmt.Println("  GET    /api/sync/database - 下载 SQLite 快照（需要 SYNC_TOKEN）")
 
 	if err := http.ListenAndServe(listenAddr, nil); err != nil {
 		log.Fatal(err)

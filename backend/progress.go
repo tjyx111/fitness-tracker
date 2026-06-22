@@ -6,10 +6,10 @@ import (
 
 // ProgressAnalyzer 进度分析器
 type ProgressAnalyzer struct {
-	csv *CSVHandler
+	csv *SQLiteHandler
 }
 
-func NewProgressAnalyzer(csv *CSVHandler) *ProgressAnalyzer {
+func NewProgressAnalyzer(csv *SQLiteHandler) *ProgressAnalyzer {
 	return &ProgressAnalyzer{csv: csv}
 }
 
@@ -172,9 +172,9 @@ func (p *ProgressAnalyzer) GetLastRecordForGroup(groupID int) (*LastRecordRespon
 
 	if lastSession == nil {
 		return &LastRecordResponse{
-			SessionID:        0,
-			Date:             "",
-			ExerciseRecords:  map[int][]TrainingRecord{},
+			SessionID:       0,
+			Date:            "",
+			ExerciseRecords: map[int][]TrainingRecord{},
 		}, nil
 	}
 

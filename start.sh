@@ -1,7 +1,13 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # 健身记录应用启动脚本
+set -euo pipefail
 
-cd "$(dirname "$0")/backend"
+APP_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=sync_token_env.sh
+source "$APP_DIR/sync_token_env.sh"
+ensure_local_sync_token
+
+cd "$APP_DIR/backend"
 
 # 设置Go环境
 export PATH=/usr/local/go/bin:$PATH

@@ -71,7 +71,7 @@ func (s *Server) handleStatsIntensity(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 获取当前体重
-	weightHandler := NewWeightRecordsHandler(s.csv.dataDir)
+	weightHandler := NewWeightRecordsHandler(s.csv)
 	currentWeight, _ := weightHandler.GetLatestWeight()
 
 	analyzer := NewStatsAnalyzer(s.csv)
@@ -259,7 +259,7 @@ func (s *Server) handleStatsReport(w http.ResponseWriter, r *http.Request) {
 	report.Comprehensive = comprehensive
 
 	// 获取体重记录
-	weightHandler := NewWeightRecordsHandler(s.csv.dataDir)
+	weightHandler := NewWeightRecordsHandler(s.csv)
 	weightRecords, _ := weightHandler.LoadWeightRecords()
 	report.WeightRecords = weightRecords
 
@@ -295,7 +295,7 @@ func (s *Server) handleWeightRecords(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		weightHandler := NewWeightRecordsHandler(s.csv.dataDir)
+		weightHandler := NewWeightRecordsHandler(s.csv)
 		records, err := weightHandler.LoadWeightRecords()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -310,8 +310,8 @@ func (s *Server) handleWeightRecords(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		weightHandler := NewWeightRecordsHandler(s.csv.dataDir)
-		if err := weightHandler.AddWeightRecord(record); err != nil {
+		weightHandler := NewWeightRecordsHandler(s.csv)
+		if err := weightHandler.AddWeightRecord(&record); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -338,7 +338,7 @@ func (s *Server) handleWeightLatest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	weightHandler := NewWeightRecordsHandler(s.csv.dataDir)
+	weightHandler := NewWeightRecordsHandler(s.csv)
 	weight, err := weightHandler.GetLatestWeight()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

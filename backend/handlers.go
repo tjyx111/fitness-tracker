@@ -10,16 +10,19 @@ import (
 
 // Server 服务器和依赖
 type Server struct {
-	csv      *CSVHandler
+	csv      *SQLiteHandler
 	analyzer *ProgressAnalyzer
 }
 
-func NewServer(dataDir string) *Server {
-	csv := NewCSVHandler(dataDir)
+func NewServer(dataDir string) (*Server, error) {
+	csv, err := NewSQLiteHandler(dataDir)
+	if err != nil {
+		return nil, err
+	}
 	return &Server{
 		csv:      csv,
 		analyzer: NewProgressAnalyzer(csv),
-	}
+	}, nil
 }
 
 // ========== 动作管理 ==========
@@ -407,11 +410,7 @@ func (s *Server) handleSessionSubmit(w http.ResponseWriter, r *http.Request) {
 		newSetCount += len(exRecord.Sets)
 	}
 	if newSetCount == 0 {
-		if err := s.csv.SaveTrainingSessions(sessions); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		if err := s.csv.SaveTrainingRecords(records); err != nil {
+		if err := s.csv.SaveTrainingData(sessions, records); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -464,12 +463,7 @@ func (s *Server) handleSessionSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 保存
-	if err := s.csv.SaveTrainingSessions(sessions); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	if err := s.csv.SaveTrainingRecords(records); err != nil {
+	if err := s.csv.SaveTrainingData(sessions, records); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

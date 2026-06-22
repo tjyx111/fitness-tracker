@@ -140,10 +140,10 @@ type ExerciseHistoryStats struct {
 
 // StatsAnalyzer 统计分析器
 type StatsAnalyzer struct {
-	csv *CSVHandler
+	csv *SQLiteHandler
 }
 
-func NewStatsAnalyzer(csv *CSVHandler) *StatsAnalyzer {
+func NewStatsAnalyzer(csv *SQLiteHandler) *StatsAnalyzer {
 	return &StatsAnalyzer{csv: csv}
 }
 
@@ -1404,10 +1404,7 @@ func (s *StatsAnalyzer) DeleteDayRecords(date string) (int, int, error) {
 		remainingRecords = append(remainingRecords, record)
 	}
 
-	if err := s.csv.SaveTrainingSessions(remainingSessions); err != nil {
-		return 0, 0, err
-	}
-	if err := s.csv.SaveTrainingRecords(remainingRecords); err != nil {
+	if err := s.csv.SaveTrainingData(remainingSessions, remainingRecords); err != nil {
 		return 0, 0, err
 	}
 

@@ -7,7 +7,7 @@ type Exercise struct {
 	ID          int    `json:"id"`
 	Name        string `json:"name"`
 	MuscleGroup string `json:"muscleGroup"`
-	Unit        string `json:"unit"` // "kg" 表示重量类型, "duration" 表示持续时间类型
+	Unit        string `json:"unit"` // kg（重量）、reps（次数）或 duration（持续时间）
 }
 
 // ExerciseGroup 健身动作组（训练计划）

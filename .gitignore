@@ -6,7 +6,12 @@
 # Runtime files
 *.log
 *.pid
+/.fitness-tracker.env
 /data/
+/backend/data/*.db
+/backend/data/*.db-*
+/backend/data/*.db.*
+/local-data-backups/
 
 # Local tool state
 /.claude/
