@@ -3,9 +3,6 @@
 set -euo pipefail
 
 APP_DIR="$(cd "$(dirname "$0")" && pwd)"
-# shellcheck source=sync_token_env.sh
-source "$APP_DIR/sync_token_env.sh"
-ensure_local_sync_token
 
 cd "$APP_DIR/backend"
 

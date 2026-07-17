@@ -8,7 +8,9 @@
 *.pid
 /.fitness-tracker.env
 /data/
+/data.tar.gz
 /backend/data/*.db
+!/backend/data/fitness.db
 /backend/data/*.db-*
 /backend/data/*.db.*
 /local-data-backups/

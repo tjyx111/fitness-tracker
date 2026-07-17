@@ -1036,7 +1036,8 @@ type FilteredStats struct {
 			Date string `json:"date"`
 			Sets int    `json:"sets"`
 		} `json:"maxSets"`
-		MaxVolume   SetPerformance `json:"maxVolume"`
+		MaxWeight   SetPerformance `json:"maxWeight"`
+		MaxReps     SetPerformance `json:"maxReps"`
 		MaxDuration SetPerformance `json:"maxDuration"`
 	} `json:"bestPerformance"`
 	DailyScores []DailyMuscleScore `json:"dailyScores"`
@@ -1282,13 +1283,14 @@ func (s *StatsAnalyzer) GetFilteredStats(days int, exerciseID int, muscleGroup s
 			bestSetByDateExercise[session.Date][record.ExerciseID] = bestSet
 		}
 
-		setVolume := recordVolumeValue(exercise, record)
-		if setVolume > stats.BestPerformance.MaxVolume.Value {
-			stats.BestPerformance.MaxVolume = buildSetPerformance(session.Date, exercise, record, setVolume)
+		if record.Weight > 0 && record.Weight > stats.BestPerformance.MaxWeight.Value {
+			stats.BestPerformance.MaxWeight = buildSetPerformanceWithUnit(session.Date, exercise, record, record.Weight, "kg")
 		}
-
+		if record.Reps > 0 && float64(record.Reps) > stats.BestPerformance.MaxReps.Value {
+			stats.BestPerformance.MaxReps = buildSetPerformanceWithUnit(session.Date, exercise, record, float64(record.Reps), "reps")
+		}
 		if record.Duration > 0 && float64(record.Duration) > stats.BestPerformance.MaxDuration.Value {
-			stats.BestPerformance.MaxDuration = buildSetPerformance(session.Date, exercise, record, float64(record.Duration))
+			stats.BestPerformance.MaxDuration = buildSetPerformanceWithUnit(session.Date, exercise, record, float64(record.Duration), "duration")
 		}
 	}
 
@@ -1489,21 +1491,14 @@ func recordRaw(exercise Exercise, record TrainingRecord) float64 {
 }
 
 func recordBestSetValue(exercise Exercise, record TrainingRecord) float64 {
-	switch exercise.Unit {
+	switch effectiveRecordUnit(exercise, record) {
 	case "duration":
 		return float64(record.Duration)
 	case "reps":
 		return float64(record.Reps)
 	default:
-		return record.Weight * float64(record.Reps)
+		return record.Weight
 	}
-}
-
-func recordVolumeValue(exercise Exercise, record TrainingRecord) float64 {
-	if exercise.Unit == "duration" {
-		return 0
-	}
-	return recordRaw(exercise, record)
 }
 
 func buildSetPerformance(date string, exercise Exercise, record TrainingRecord, value float64) SetPerformance {
@@ -1520,6 +1515,12 @@ func buildSetPerformance(date string, exercise Exercise, record TrainingRecord, 
 		Duration:     record.Duration,
 		Value:        value,
 	}
+}
+
+func buildSetPerformanceWithUnit(date string, exercise Exercise, record TrainingRecord, value float64, unit string) SetPerformance {
+	performance := buildSetPerformance(date, exercise, record, value)
+	performance.Unit = unit
+	return performance
 }
 
 func effectiveRecordUnit(exercise Exercise, record TrainingRecord) string {

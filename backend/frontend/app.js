@@ -13,6 +13,22 @@ let state = {
     savingSession: false,
     editingExerciseId: null,
     editingGroupId: null,
+    savingExerciseId: null,
+    noteTags: [],
+    popularNoteTags: [],
+    currentNoteTag: null,
+    currentNote: null,
+    noteHistory: [],
+    editingNoteHistoryId: null,
+    savingNoteHistoryId: null,
+    noteSaveTimer: null,
+    noteSaving: false,
+    todoItems: [],
+    editingTodoId: null,
+    todoSaving: false,
+    challengeDays: [],
+    challengeSaving: false,
+    challengeRefreshTimer: null,
     statsDashboardTemplate: ''
 };
 
@@ -27,6 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const dashboard = document.querySelector('.stats-dashboard');
     state.statsDashboardTemplate = dashboard ? dashboard.innerHTML : '';
     initEventListeners();
+    scheduleChallengeDailyRefresh();
 });
 
 // 导航切换
@@ -44,6 +61,12 @@ function initNavigation() {
             if (page === 'exercises') {
                 loadExercisesTable();
                 loadGroupsTable();
+            } else if (page === 'notes') {
+                loadNotesPage();
+            } else if (page === 'todos') {
+                loadTodosPage();
+            } else if (page === 'challenges') {
+                loadChallengesPage();
             } else if (page === 'statistics') {
                 loadStatistics();
             } else if (page === 'training') {
@@ -58,6 +81,7 @@ function initDateInputs() {
     const today = new Date().toISOString().split('T')[0];
     document.getElementById('training-date').value = today;
     document.getElementById('detail-date').value = today;
+    document.getElementById('challenge-date').value = today;
     document.getElementById('training-duration').value = 40;
 }
 
@@ -99,9 +123,24 @@ function initEventListeners() {
     // 表单提交
     document.getElementById('exercise-form').addEventListener('submit', saveExercise);
     document.getElementById('group-form').addEventListener('submit', saveGroup);
+    document.getElementById('delete-exercise-modal-btn')?.addEventListener('click', deleteCurrentExerciseFromModal);
+    document.getElementById('add-note-tag-btn')?.addEventListener('click', addNoteTag);
+    document.getElementById('note-tag-name')?.addEventListener('keydown', event => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            addNoteTag();
+        }
+    });
+    document.getElementById('note-content')?.addEventListener('input', scheduleNoteSave);
+    document.getElementById('new-note-btn')?.addEventListener('click', createNewNote);
+    document.getElementById('todo-create-form')?.addEventListener('submit', addTodoItem);
+    document.getElementById('show-completed-todos-btn')?.addEventListener('click', openCompletedTodosModal);
+    document.getElementById('challenge-create-form')?.addEventListener('submit', createChallenge);
+    document.getElementById('challenge-date')?.addEventListener('change', loadChallengesPage);
 
     // 统计筛选切换
     document.getElementById('stats-type')?.addEventListener('change', onStatsTypeChange);
+    document.getElementById('stats-muscle-target')?.addEventListener('change', onStatsMuscleTargetChange);
     document.getElementById('stats-target')?.addEventListener('change', onStatsTargetChange);
     document.getElementById('stats-period')?.addEventListener('change', refreshStats);
     document.getElementById('stats-percentile')?.addEventListener('change', refreshStats);
@@ -311,8 +350,8 @@ function normalizeGroupName(name) {
 }
 
 async function deleteExercise(id) {
-    if (!confirm('确定要删除这个动作吗？')) {
-        return;
+    if (!confirm('确定要删除这个动作吗？该动作的历史训练数据也会一起删除。')) {
+        return false;
     }
 
     try {
@@ -327,10 +366,887 @@ async function deleteExercise(id) {
         await loadGroups();
         loadExercisesTable();
         loadGroupsTable();
+        return true;
     } catch (err) {
         console.error('Failed to delete exercise:', err);
         alert('删除失败');
+        return false;
     }
+}
+
+async function deleteCurrentExerciseFromModal() {
+    if (state.editingExerciseId === null) {
+        return;
+    }
+    const deleted = await deleteExercise(state.editingExerciseId);
+    if (deleted) {
+        closeModal('exercise-modal');
+        document.getElementById('exercise-form').reset();
+        state.editingExerciseId = null;
+    }
+}
+
+// ========== 笔记 ==========
+
+async function loadNotesPage() {
+    await loadNoteTags();
+    renderNoteTags();
+}
+
+async function loadNoteTags() {
+    try {
+        const res = await fetch(`${API_BASE}/note-tags`);
+        if (!res.ok) {
+            throw new Error(await res.text());
+        }
+        const data = await res.json();
+        state.noteTags = data.tags || [];
+        state.popularNoteTags = data.popularTags || [];
+    } catch (err) {
+        console.error('Failed to load note tags:', err);
+        state.noteTags = [];
+        state.popularNoteTags = [];
+    }
+}
+
+function renderNoteTags() {
+    renderNoteTagList('popular-note-tags', state.popularNoteTags.slice(0, 4));
+    renderNoteTagList('all-note-tags', state.noteTags);
+}
+
+function renderNoteTagList(containerId, tags) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    if (!tags || tags.length === 0) {
+        container.innerHTML = '<p class="empty-hint">暂无标签</p>';
+        return;
+    }
+    container.innerHTML = tags.map(tag => `
+        <button class="note-tag-btn ${state.currentNoteTag?.id === tag.id ? 'active' : ''}" onclick="selectNoteTag(${tag.id})">
+            ${escapeHtml(tag.name)}
+        </button>
+    `).join('');
+}
+
+async function addNoteTag() {
+    const input = document.getElementById('note-tag-name');
+    const name = input.value.trim();
+    if (!name) {
+        return;
+    }
+
+    try {
+        const res = await fetch(`${API_BASE}/note-tags`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name })
+        });
+        if (!res.ok) {
+            throw new Error(await res.text());
+        }
+        const tag = await res.json();
+        input.value = '';
+        await loadNoteTags();
+        renderNoteTags();
+        await selectNoteTag(tag.id);
+    } catch (err) {
+        console.error('Failed to add note tag:', err);
+        alert('添加标签失败，请重试');
+    }
+}
+
+async function selectNoteTag(tagId) {
+    const tag = state.noteTags.find(item => item.id === tagId) ||
+        state.popularNoteTags.find(item => item.id === tagId);
+    if (!tag) {
+        return;
+    }
+
+    if (state.noteSaveTimer) {
+        clearTimeout(state.noteSaveTimer);
+        state.noteSaveTimer = null;
+    }
+    await saveCurrentNote();
+
+    state.currentNoteTag = tag;
+    document.getElementById('current-note-tag').textContent = tag.name;
+    const newNoteBtn = document.getElementById('new-note-btn');
+    if (newNoteBtn) {
+        newNoteBtn.disabled = false;
+    }
+    setNoteSaveStatus('加载中');
+
+    try {
+        await fetch(`${API_BASE}/note-tags/${tag.id}/touch`, { method: 'POST' });
+        const res = await fetch(`${API_BASE}/notes?tagId=${encodeURIComponent(tag.id)}`);
+        if (!res.ok) {
+            throw new Error(await res.text());
+        }
+        state.currentNote = await res.json();
+        const textarea = document.getElementById('note-content');
+        textarea.disabled = false;
+        textarea.value = state.currentNote.content || '';
+        await loadNoteHistory(tag.id);
+        renderNoteHistory();
+        setNoteSaveStatus('已保存');
+        await loadNoteTags();
+        renderNoteTags();
+    } catch (err) {
+        console.error('Failed to load note:', err);
+        setNoteSaveStatus('加载失败');
+    }
+}
+
+async function createNewNote() {
+    if (!state.currentNoteTag || state.noteSaving) {
+        return;
+    }
+
+    await saveCurrentNote();
+    setNoteSaveStatus('新建中');
+
+    try {
+        const res = await fetch(`${API_BASE}/notes/new`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tagId: state.currentNoteTag.id })
+        });
+        if (!res.ok) {
+            throw new Error(await res.text());
+        }
+
+        state.currentNote = await res.json();
+        const textarea = document.getElementById('note-content');
+        if (textarea) {
+            textarea.disabled = false;
+            textarea.value = '';
+            textarea.focus();
+        }
+        await loadNoteHistory(state.currentNoteTag.id);
+        renderNoteHistory();
+        await loadNoteTags();
+        renderNoteTags();
+        setNoteSaveStatus('新笔记');
+    } catch (err) {
+        console.error('Failed to create new note:', err);
+        setNoteSaveStatus('新建失败');
+        alert('新建笔记失败，请重试');
+    }
+}
+
+function scheduleNoteSave() {
+    if (!state.currentNoteTag) {
+        return;
+    }
+    setNoteSaveStatus('待保存');
+    if (state.noteSaveTimer) {
+        clearTimeout(state.noteSaveTimer);
+    }
+    state.noteSaveTimer = setTimeout(() => {
+        saveCurrentNote();
+    }, 3000);
+}
+
+async function saveCurrentNote() {
+    if (!state.currentNoteTag || state.noteSaving) {
+        return;
+    }
+
+    const textarea = document.getElementById('note-content');
+    if (!textarea || textarea.disabled) {
+        return;
+    }
+    if (state.noteSaveTimer) {
+        clearTimeout(state.noteSaveTimer);
+        state.noteSaveTimer = null;
+    }
+
+    state.noteSaving = true;
+    setNoteSaveStatus('保存中');
+    try {
+        const res = await fetch(`${API_BASE}/notes`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                tagId: state.currentNoteTag.id,
+                content: textarea.value
+            })
+        });
+        if (!res.ok) {
+            throw new Error(await res.text());
+        }
+        state.currentNote = await res.json();
+        setNoteSaveStatus('已保存');
+        await loadNoteHistory(state.currentNoteTag.id);
+        renderNoteHistory();
+        await loadNoteTags();
+        renderNoteTags();
+    } catch (err) {
+        console.error('Failed to save note:', err);
+        setNoteSaveStatus('保存失败');
+    } finally {
+        state.noteSaving = false;
+    }
+}
+
+function setNoteSaveStatus(text) {
+    const status = document.getElementById('note-save-status');
+    if (status) {
+        status.textContent = text;
+    }
+}
+
+async function loadNoteHistory(tagId) {
+    try {
+        const res = await fetch(`${API_BASE}/notes/history?tagId=${encodeURIComponent(tagId)}`);
+        if (!res.ok) {
+            throw new Error(await res.text());
+        }
+        state.noteHistory = await res.json();
+    } catch (err) {
+        console.error('Failed to load note history:', err);
+        state.noteHistory = [];
+    }
+}
+
+function renderNoteHistory() {
+    const container = document.getElementById('note-history-list');
+    if (!container) return;
+    if (!state.currentNoteTag) {
+        container.innerHTML = '<p class="empty-hint">选择标签后查看历史笔记</p>';
+        return;
+    }
+    if (!state.noteHistory || state.noteHistory.length === 0) {
+        container.innerHTML = '<p class="empty-hint">暂无历史笔记</p>';
+        return;
+    }
+    container.innerHTML = state.noteHistory.map(item => `
+        <div class="note-history-item ${state.editingNoteHistoryId === item.id ? 'editing' : ''}">
+            <div class="note-history-title-row">
+                <div>
+                    <div class="note-history-summary">${escapeHtml(item.summary || summarizeNoteClient(item.content || ''))}</div>
+                    <div class="note-history-time">${formatNoteTime(item.createdAt)}</div>
+                </div>
+                <div class="note-history-actions">
+                    ${state.editingNoteHistoryId === item.id
+                        ? `<button class="btn btn-primary btn-small" onclick="saveNoteHistory(${item.id})">${state.savingNoteHistoryId === item.id ? '保存中' : '保存'}</button>
+                           <button class="btn btn-secondary btn-small" onclick="cancelEditNoteHistory()">取消</button>`
+                        : `<button class="btn btn-secondary btn-small" onclick="editNoteHistory(${item.id})">编辑</button>`}
+                </div>
+            </div>
+            ${state.editingNoteHistoryId === item.id
+                ? `<textarea id="note-history-edit-${item.id}" class="note-history-edit">${escapeHtml(item.content || '')}</textarea>`
+                : `<div class="note-history-content">${escapeHtml(item.content || '')}</div>`}
+        </div>
+    `).join('');
+}
+
+function editNoteHistory(id) {
+    state.editingNoteHistoryId = id;
+    renderNoteHistory();
+    const textarea = document.getElementById(`note-history-edit-${id}`);
+    if (textarea) {
+        textarea.focus();
+        textarea.selectionStart = textarea.value.length;
+        textarea.selectionEnd = textarea.value.length;
+    }
+}
+
+function cancelEditNoteHistory() {
+    state.editingNoteHistoryId = null;
+    renderNoteHistory();
+}
+
+async function saveNoteHistory(id) {
+    const textarea = document.getElementById(`note-history-edit-${id}`);
+    if (!textarea || state.savingNoteHistoryId) {
+        return;
+    }
+
+    state.savingNoteHistoryId = id;
+    renderNoteHistory();
+    try {
+        const res = await fetch(`${API_BASE}/notes/history`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, content: textarea.value })
+        });
+        if (!res.ok) {
+            throw new Error(await res.text());
+        }
+        const updated = await res.json();
+        state.noteHistory = state.noteHistory.map(item => item.id === id ? updated : item);
+        state.editingNoteHistoryId = null;
+    } catch (err) {
+        console.error('Failed to save note history:', err);
+        alert('保存历史笔记失败，请重试');
+    } finally {
+        state.savingNoteHistoryId = null;
+        renderNoteHistory();
+    }
+}
+
+function summarizeNoteClient(content) {
+    const lines = String(content || '').split('\n').map(line => cleanNoteSummaryLineClient(line)).filter(Boolean);
+    for (const line of lines) {
+        const prefix = ['标题:', '标题：', 'title:', '主题:', '主题：'].find(item => line.toLowerCase().startsWith(item.toLowerCase()));
+        if (prefix) {
+            const title = line.slice(prefix.length).trim();
+            if (title) return truncateText(title, 28);
+        }
+        if ([...line].length <= 28 && !endsWithSentencePunctuationClient(line)) {
+            return line;
+        }
+        break;
+    }
+    let text = String(content || '').replace(/\s+/g, ' ').trim();
+    if (!text) return '空笔记';
+    for (const sep of ['。', '！', '？', '；', '.', '!', '?', ';']) {
+        const index = text.indexOf(sep);
+        if (index > 0) {
+            text = text.slice(0, index).trim();
+            break;
+        }
+    }
+    text = cleanNoteSummaryLineClient(text);
+    return text ? truncateText(text, 36) : '未命名笔记';
+}
+
+function cleanNoteSummaryLineClient(value) {
+    return String(value || '')
+        .trim()
+        .replace(/^[#>\-*+\s]+/, '')
+        .trim()
+        .replace(/^[`"'“”‘’]+|[`"'“”‘’]+$/g, '')
+        .replace(/\s+/g, ' ');
+}
+
+function endsWithSentencePunctuationClient(value) {
+    return /[。！？；.!?;]$/.test(String(value || '').trim());
+}
+
+function truncateText(value, limit) {
+    const chars = [...String(value || '').trim()];
+    if (chars.length <= limit) {
+        return chars.join('');
+    }
+    return `${chars.slice(0, Math.max(1, limit - 1)).join('')}…`;
+}
+
+function formatNoteTime(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return value;
+    }
+    return date.toLocaleString('zh-CN', {
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+// ========== 每日挑战 ==========
+
+async function loadChallengesPage() {
+    const date = document.getElementById('challenge-date')?.value;
+    if (!date) return;
+    try {
+        const res = await fetch(`${API_BASE}/challenges?date=${encodeURIComponent(date)}`);
+        if (!res.ok) throw new Error(await res.text());
+        state.challengeDays = await res.json();
+        renderChallengeDays();
+    } catch (err) {
+        console.error('Failed to load challenges:', err);
+        state.challengeDays = [];
+        renderChallengeDays();
+    }
+}
+
+async function createChallenge(event) {
+    event.preventDefault();
+    if (state.challengeSaving) return;
+
+    const name = document.getElementById('challenge-name').value.trim();
+    const days = parseInt(document.getElementById('challenge-days').value, 10);
+    const startDate = document.getElementById('challenge-date').value;
+    const items = document.getElementById('challenge-items').value.split('\n').map(item => item.trim()).filter(Boolean);
+    if (!Number.isInteger(days) || days < 1 || days > 366 || items.length === 0) {
+        alert('请输入 1 到 366 天的周期，并至少填写一个挑战事项');
+        return;
+    }
+
+    state.challengeSaving = true;
+    try {
+        const res = await fetch(`${API_BASE}/challenges`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, days, startDate, items })
+        });
+        if (!res.ok) throw new Error(await res.text());
+        document.getElementById('challenge-name').value = '';
+        document.getElementById('challenge-days').value = '7';
+        document.getElementById('challenge-items').value = '';
+        await loadChallengesPage();
+    } catch (err) {
+        console.error('Failed to create challenge:', err);
+        alert('创建挑战失败，请重试');
+    } finally {
+        state.challengeSaving = false;
+    }
+}
+
+async function toggleChallengeDailyItem(id, completed) {
+    try {
+        const res = await fetch(`${API_BASE}/challenge-daily-items/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ completed })
+        });
+        if (!res.ok) throw new Error(await res.text());
+        await loadChallengesPage();
+    } catch (err) {
+        console.error('Failed to update challenge item:', err);
+        alert('更新挑战事项失败，请重试');
+    }
+}
+
+async function terminateChallenge(id) {
+    if (!confirm('提前终止后将保留已完成历史，是否继续？')) return;
+    try {
+        const res = await fetch(`${API_BASE}/challenges/${id}/terminate`, { method: 'POST' });
+        if (!res.ok) throw new Error(await res.text());
+        await loadChallengesPage();
+    } catch (err) {
+        console.error('Failed to terminate challenge:', err);
+        alert('提前终止挑战失败，请重试');
+    }
+}
+
+function renderChallengeDays() {
+    const container = document.getElementById('challenge-day-list');
+    const summary = document.getElementById('challenge-day-summary');
+    if (!container) return;
+
+    const days = state.challengeDays || [];
+    const total = days.reduce((sum, day) => sum + (day.totalItems || 0), 0);
+    const completed = days.reduce((sum, day) => sum + (day.completedItems || 0), 0);
+    const percent = total ? Math.round((completed * 100) / total) : 0;
+    if (summary) summary.textContent = `${completed} / ${total} · ${percent}%`;
+    if (days.length === 0) {
+        container.innerHTML = '<p class="empty-hint">当天没有挑战事项</p>';
+        return;
+    }
+
+    container.innerHTML = days.map(day => `
+        <section class="challenge-card">
+            <div class="challenge-card-header">
+                <div>
+                    <h3>${escapeHtml(day.challengeName)}</h3>
+                    <p>${day.completedItems} / ${day.totalItems} 已完成 · ${Math.round(day.completionPercent)}%</p>
+                </div>
+                <button class="btn btn-danger btn-small" onclick="terminateChallenge(${day.challengeId})">提前终止</button>
+            </div>
+            <div class="challenge-items-list">
+                ${day.items.map(item => `
+                    <label class="challenge-item ${item.completed ? 'completed' : ''}">
+                        <input type="checkbox" ${item.completed ? 'checked' : ''} onchange="toggleChallengeDailyItem(${item.id}, this.checked)" />
+                        <span>${escapeHtml(item.title)}</span>
+                    </label>
+                `).join('')}
+            </div>
+        </section>
+    `).join('');
+}
+
+function scheduleChallengeDailyRefresh() {
+    if (state.challengeRefreshTimer) {
+        clearTimeout(state.challengeRefreshTimer);
+    }
+    const now = new Date();
+    const nextDay = new Date(now);
+    nextDay.setHours(24, 0, 1, 0);
+    state.challengeRefreshTimer = setTimeout(() => {
+        const input = document.getElementById('challenge-date');
+        if (input) {
+            input.value = formatLocalDate(new Date());
+        }
+        if (document.getElementById('page-challenges')?.classList.contains('active')) {
+            loadChallengesPage();
+        }
+        scheduleChallengeDailyRefresh();
+    }, nextDay.getTime() - now.getTime());
+}
+
+// ========== 待办事项 ==========
+
+async function loadTodosPage() {
+    await loadTodoItems();
+    renderTodoItems();
+}
+
+async function loadTodoItems() {
+    try {
+        const res = await fetch(`${API_BASE}/todos`);
+        if (!res.ok) {
+            throw new Error(await res.text());
+        }
+        state.todoItems = await res.json();
+    } catch (err) {
+        console.error('Failed to load todos:', err);
+        state.todoItems = [];
+    }
+}
+
+async function addTodoItem(event) {
+    event.preventDefault();
+    if (state.todoSaving) {
+        return;
+    }
+
+    const input = document.getElementById('todo-title');
+    const title = input.value.trim();
+    if (!title) {
+        return;
+    }
+
+    state.todoSaving = true;
+    try {
+        const res = await fetch(`${API_BASE}/todos`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title })
+        });
+        if (!res.ok) {
+            throw new Error(await res.text());
+        }
+        input.value = '';
+        await loadTodosPage();
+    } catch (err) {
+        console.error('Failed to add todo:', err);
+        alert('添加待办失败，请重试');
+    } finally {
+        state.todoSaving = false;
+    }
+}
+
+async function toggleTodo(id, completed) {
+    const item = state.todoItems.find(todo => todo.id === id);
+    if (!item) {
+        return;
+    }
+    await saveTodoItem(id, item.title, completed);
+}
+
+function editTodo(id) {
+    state.editingTodoId = id;
+    renderTodoItems();
+    const input = document.getElementById(`todo-edit-${id}`);
+    if (input) {
+        input.focus();
+        input.selectionStart = input.value.length;
+        input.selectionEnd = input.value.length;
+    }
+}
+
+function cancelEditTodo() {
+    state.editingTodoId = null;
+    renderTodoItems();
+}
+
+async function saveTodoEdit(id) {
+    const input = document.getElementById(`todo-edit-${id}`);
+    const item = state.todoItems.find(todo => todo.id === id);
+    if (!input || !item) {
+        return;
+    }
+    const title = input.value.trim();
+    if (!title) {
+        alert('待办事项不能为空');
+        return;
+    }
+    await saveTodoItem(id, title, item.completed);
+}
+
+async function saveTodoItem(id, title, completed) {
+    try {
+        const res = await fetch(`${API_BASE}/todos/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title, completed })
+        });
+        if (!res.ok) {
+            throw new Error(await res.text());
+        }
+        const updated = await res.json();
+        state.todoItems = state.todoItems.map(item => item.id === id ? updated : item);
+        state.editingTodoId = null;
+        await loadTodosPage();
+        refreshCompletedTodosModal();
+    } catch (err) {
+        console.error('Failed to save todo:', err);
+        alert('保存待办失败，请重试');
+        await loadTodosPage();
+        refreshCompletedTodosModal();
+    }
+}
+
+async function deleteTodo(id) {
+    if (!confirm('确定要删除这个待办事项吗？')) {
+        return;
+    }
+    try {
+        const res = await fetch(`${API_BASE}/todos/${id}`, {
+            method: 'DELETE'
+        });
+        if (!res.ok) {
+            throw new Error(await res.text());
+        }
+        if (state.editingTodoId === id) {
+            state.editingTodoId = null;
+        }
+        await loadTodosPage();
+        refreshCompletedTodosModal();
+    } catch (err) {
+        console.error('Failed to delete todo:', err);
+        alert('删除待办失败，请重试');
+    }
+}
+
+function renderTodoItems() {
+    const activeContainer = document.getElementById('todo-active-list');
+    const summary = document.getElementById('todo-summary');
+    const completedCount = document.getElementById('todo-completed-count');
+    if (!activeContainer) return;
+
+    const items = state.todoItems || [];
+    const openCount = items.filter(item => !item.completed).length;
+    const doneCount = items.length - openCount;
+    if (summary) {
+        summary.textContent = `${openCount} 未完成 · ${doneCount} 已完成`;
+    }
+    if (completedCount) {
+        completedCount.textContent = `${doneCount} 项`;
+    }
+
+    const activeItems = items.filter(item => !item.completed);
+    activeContainer.innerHTML = activeItems.length === 0
+        ? '<p class="empty-hint">暂无待办事项</p>'
+        : renderTodoListItems(activeItems);
+
+    document.querySelectorAll('.todo-edit-input').forEach(input => {
+        input.addEventListener('keydown', event => {
+            const id = parseInt(input.id.replace('todo-edit-', ''));
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                saveTodoEdit(id);
+            } else if (event.key === 'Escape') {
+                event.preventDefault();
+                cancelEditTodo();
+            }
+        });
+    });
+}
+
+function openCompletedTodosModal() {
+    renderCompletedTodosModal();
+    openModal('todo-completed-modal');
+}
+
+function refreshCompletedTodosModal() {
+    const modal = document.getElementById('todo-completed-modal');
+    if (modal?.classList.contains('active')) {
+        renderCompletedTodosModal();
+    }
+}
+
+function renderCompletedTodosModal() {
+    const container = document.getElementById('todo-completed-modal-list');
+    if (!container) return;
+
+    const completedItems = (state.todoItems || [])
+        .filter(item => item.completed)
+        .slice()
+        .sort((a, b) => todoDateValue(b.completedAt || b.updatedAt) - todoDateValue(a.completedAt || a.updatedAt));
+
+    if (completedItems.length === 0) {
+        container.innerHTML = '<p class="empty-hint">暂无已完成事项</p>';
+        return;
+    }
+
+    const groups = new Map();
+    completedItems.forEach(item => {
+        const dateKey = formatTodoDate(item.completedAt || item.updatedAt);
+        if (!groups.has(dateKey)) {
+            groups.set(dateKey, []);
+        }
+        groups.get(dateKey).push(item);
+    });
+
+    container.innerHTML = Array.from(groups.entries()).map(([date, items]) => `
+        <div class="todo-completed-date-group">
+            <h3>${escapeHtml(date)}</h3>
+            <div class="todo-list">
+                ${items.map(item => `
+                    <div class="todo-item completed" data-todo-id="${item.id}">
+                        <div class="todo-main">
+                            <div class="todo-title">${escapeHtml(item.title)}</div>
+                            <div class="todo-time">${formatTodoMeta(item)}</div>
+                        </div>
+                        <div class="todo-actions">
+                            <button class="btn btn-secondary btn-small" onclick="toggleTodo(${item.id}, false)">取消完成</button>
+                            <button class="btn btn-danger btn-small" onclick="deleteTodo(${item.id})">删除</button>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `).join('');
+}
+
+function renderTodoListItems(items) {
+    return items.map(item => {
+        const isEditing = state.editingTodoId === item.id;
+        return `
+            <div class="todo-item ${item.completed ? 'completed' : ''}" data-todo-id="${item.id}">
+                <label class="todo-check">
+                    <input type="checkbox" ${item.completed ? 'checked' : ''} onchange="toggleTodo(${item.id}, this.checked)" />
+                </label>
+                <div class="todo-main">
+                    ${isEditing
+                        ? `<div class="todo-edit-fields">
+                               <input type="text" id="todo-edit-${item.id}" class="todo-edit-input" value="${escapeHtml(item.title)}" />
+                           </div>`
+                        : `<div class="todo-title">${escapeHtml(item.title)}</div>
+                           <div class="todo-time">${formatTodoMeta(item)}</div>`}
+                </div>
+                <div class="todo-actions">
+                    ${isEditing
+                        ? `<button class="btn btn-primary btn-small" onclick="saveTodoEdit(${item.id})">保存</button>
+                           <button class="btn btn-secondary btn-small" onclick="cancelEditTodo()">取消</button>`
+                        : `<button class="btn btn-secondary btn-small" onclick="editTodo(${item.id})">编辑</button>
+                           <button class="btn btn-danger btn-small" onclick="deleteTodo(${item.id})">删除</button>`}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function formatTodoMeta(item) {
+    const parts = [];
+    if (item.startAt) {
+        parts.push(`启动 ${formatTodoTime(item.startAt)}`);
+    }
+    if (item.completed && item.completedAt) {
+        parts.push(`完成 ${formatTodoTime(item.completedAt)}`);
+    } else if (item.updatedAt) {
+        parts.push(`更新 ${formatTodoTime(item.updatedAt)}`);
+    }
+    return parts.join(' · ');
+}
+
+function formatTodoTime(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return value;
+    }
+    return date.toLocaleString('zh-CN', {
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+function formatTodoDate(value) {
+    if (!value) return '未记录日期';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return String(value).slice(0, 10) || '未记录日期';
+    }
+    return date.toLocaleDateString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    });
+}
+
+function todoDateValue(value) {
+    const date = new Date(value || 0);
+    const time = date.getTime();
+    return Number.isNaN(time) ? 0 : time;
+}
+
+function escapeHtml(value) {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function collectExerciseRecordFromCard(card) {
+    const exerciseId = parseInt(card.dataset.exerciseId);
+    const unit = card.dataset.unit || 'kg';
+    const isDurationType = unit === 'duration';
+    const isRepsType = unit === 'reps';
+    const setRows = card.querySelectorAll('.current-set');
+    const sets = [];
+
+    setRows.forEach(row => {
+        let weight = 0;
+        let reps = 0;
+        let duration = 0;
+
+        if (isDurationType) {
+            duration = parseInt(row.querySelector('.duration-input').value) || 0;
+            reps = 1;
+        } else if (isRepsType) {
+            reps = parseInt(row.querySelector('.reps-input').value) || 0;
+        } else {
+            weight = parseFloat(row.querySelector('.weight-input').value) || 0;
+            reps = parseInt(row.querySelector('.reps-input').value) || 0;
+        }
+
+        const hasValue = isDurationType ? duration > 0 : reps > 0;
+        if (!hasValue) {
+            return;
+        }
+
+        sets.push({
+            setNumber: sets.length + 1,
+            weight,
+            reps,
+            duration,
+            note: ''
+        });
+    });
+
+    return { exerciseId, sets };
+}
+
+function buildSessionData(exerciseRecords) {
+    return {
+        groupId: state.currentGroup.id,
+        date: document.getElementById('detail-date').value,
+        durationMinutes: parseInt(document.getElementById('training-duration').value) || 40,
+        exerciseRecords
+    };
+}
+
+async function postSessionData(sessionData) {
+    const response = await fetch(`${API_BASE}/session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sessionData)
+    });
+    if (!response.ok) {
+        throw new Error(await response.text());
+    }
+    return response.json();
 }
 
 async function saveSession() {
@@ -343,47 +1259,9 @@ async function saveSession() {
         return;
     }
 
-    // 收集当前输入的数据
     const exerciseRecords = [];
-    const exerciseCards = document.querySelectorAll('.exercise-card');
-
-    exerciseCards.forEach(card => {
-        const exerciseId = parseInt(card.dataset.exerciseId);
-        const unit = card.dataset.unit || 'kg';
-        const isDurationType = unit === 'duration';
-        const isRepsType = unit === 'reps';
-        const setRows = card.querySelectorAll('.current-set');
-        const sets = [];
-
-        setRows.forEach((row, index) => {
-            let weight = 0;
-            let reps = 0;
-            let duration = 0;
-
-            if (isDurationType) {
-                duration = parseInt(row.querySelector('.duration-input').value) || 0;
-                reps = 1; // 持续时间类型默认次数为1
-            } else if (isRepsType) {
-                reps = parseInt(row.querySelector('.reps-input').value) || 0;
-            } else {
-                weight = parseFloat(row.querySelector('.weight-input').value) || 0;
-                reps = parseInt(row.querySelector('.reps-input').value) || 0;
-            }
-
-            const hasValue = isDurationType ? duration > 0 : reps > 0;
-            if (!hasValue) {
-                return;
-            }
-
-            sets.push({
-                setNumber: sets.length + 1,
-                weight,
-                reps,
-                duration,
-                note: ''
-            });
-        });
-
+    document.querySelectorAll('.exercise-card').forEach(card => {
+        const { exerciseId, sets } = collectExerciseRecordFromCard(card);
         if (sets.length > 0 || state.editingHistoryDate) {
             exerciseRecords.push({ exerciseId, sets });
         }
@@ -394,12 +1272,7 @@ async function saveSession() {
         return;
     }
 
-    const sessionData = {
-        groupId: state.currentGroup.id,
-        date: document.getElementById('detail-date').value,
-        durationMinutes: parseInt(document.getElementById('training-duration').value) || 40,
-        exerciseRecords
-    };
+    const sessionData = buildSessionData(exerciseRecords);
 
     const saveButton = document.getElementById('save-session');
     state.savingSession = true;
@@ -409,14 +1282,7 @@ async function saveSession() {
     }
 
     try {
-        const response = await fetch(`${API_BASE}/session`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(sessionData)
-        });
-        if (!response.ok) {
-            throw new Error(await response.text());
-        }
+        await postSessionData(sessionData);
 
         alert('训练记录保存成功！');
         document.getElementById('page-training-detail').classList.remove('active');
@@ -429,13 +1295,60 @@ async function saveSession() {
         await loadTrainingDateSessions(sessionData.date);
     } catch (err) {
         console.error('Failed to save session:', err);
-        alert('保存失败');
+        alert(`保存失败：${err.message || '请重试'}`);
     } finally {
         state.savingSession = false;
         if (saveButton) {
             saveButton.disabled = false;
             saveButton.textContent = '保存本次训练';
         }
+    }
+}
+
+async function saveSingleExercise(btn) {
+    if (state.savingSession || state.savingExerciseId) {
+        return;
+    }
+    if (!state.currentGroup) {
+        alert('没有可保存的训练数据');
+        return;
+    }
+
+    const exerciseCard = btn.closest('.exercise-card');
+    if (!exerciseCard) {
+        return;
+    }
+    const record = collectExerciseRecordFromCard(exerciseCard);
+    if (record.sets.length === 0) {
+        alert('请至少记录一组该动作');
+        return;
+    }
+
+    const sessionData = buildSessionData([record]);
+    const originalText = btn.textContent;
+    state.savingExerciseId = record.exerciseId;
+    btn.disabled = true;
+    btn.textContent = '保存中...';
+
+    try {
+        await postSessionData(sessionData);
+        state.currentLastRecord = state.currentLastRecord || { exerciseRecords: {} };
+        state.currentLastRecord.exerciseRecords = state.currentLastRecord.exerciseRecords || {};
+        state.currentLastRecord.exerciseRecords[record.exerciseId] = record.sets;
+        btn.textContent = '已保存';
+        exerciseCard.classList.add('exercise-card-saved');
+        await loadTrainingDateSessions(sessionData.date);
+        setTimeout(() => {
+            btn.textContent = originalText;
+            exerciseCard.classList.remove('exercise-card-saved');
+        }, 1500);
+    } catch (err) {
+        console.error('Failed to save exercise record:', err);
+        alert(`保存该动作失败：${err.message || '请重试'}`);
+        btn.textContent = originalText;
+    } finally {
+        state.savingExerciseId = null;
+        btn.disabled = false;
     }
 }
 
@@ -609,6 +1522,7 @@ async function openTrainingDetailForGroup(group, options = {}) {
                             <button class="add-set-btn" onclick="addSet(this)">+ 添加组</button>
                             ${!isHistoryEdit && lastSets.length > 0 ? '<button class="ghost-set-btn" onclick="copyLastSets(this)">复制上次</button>' : ''}
                             <button class="ghost-set-btn" onclick="clearExerciseSets(this)">清空</button>
+                            <button class="save-exercise-btn" onclick="saveSingleExercise(this)">保存此动作</button>
                         </div>
                     </div>
 
@@ -779,32 +1693,26 @@ function loadExercisesTable() {
     const container = document.getElementById('exercises-table-container');
     const validExercises = state.exercises.filter(ex => ex.id > 0); // 过滤掉标题行
 
+    if (validExercises.length === 0) {
+        container.innerHTML = '<p class="empty-hint">暂无动作</p>';
+        return;
+    }
+
     container.innerHTML = `
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>动作名称</th>
-                    <th>肌肉部位</th>
-                    <th>单位类型</th>
-                    <th>操作</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${validExercises.map(ex => `
-                    <tr data-exercise-id="${ex.id}">
-                        <td>${ex.id}</td>
-                        <td class="exercise-name">${ex.name}</td>
-                        <td class="exercise-muscle">${ex.muscleGroup}</td>
-                        <td>${formatExerciseUnit(ex.unit)}</td>
-                        <td>
-                            <button onclick="editExercise(${ex.id})" class="btn btn-primary btn-sm">编辑</button>
-                            <button onclick="deleteExercise(${ex.id})" class="btn btn-secondary btn-sm">删除</button>
-                        </td>
-                    </tr>
-                `).join('')}
-            </tbody>
-        </table>
+        <div class="management-list">
+            ${validExercises.map(ex => `
+                <div class="management-item" data-exercise-id="${ex.id}">
+                    <div class="management-info">
+                        <div class="management-title">${ex.name}</div>
+                        <div class="management-meta">#${ex.id} · ${ex.muscleGroup} · ${formatExerciseUnit(ex.unit)}</div>
+                    </div>
+                    <div class="management-actions">
+                        <button onclick="editExercise(${ex.id})" class="btn btn-primary btn-sm">编辑</button>
+                        <button onclick="deleteExercise(${ex.id})" class="btn btn-danger btn-sm">删除动作</button>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
     `;
 }
 
@@ -818,6 +1726,7 @@ function openAddExerciseModal() {
     state.editingExerciseId = null;
     document.getElementById('exercise-modal-title').textContent = '添加动作';
     document.getElementById('exercise-form').reset();
+    document.getElementById('delete-exercise-modal-btn').style.display = 'none';
     loadExerciseGroupCheckboxes([]);
     openModal('exercise-modal');
 }
@@ -832,6 +1741,7 @@ function editExercise(id) {
     document.getElementById('exercise-name').value = exercise.name;
     document.getElementById('exercise-muscle').value = exercise.muscleGroup;
     document.getElementById('exercise-unit').value = exercise.unit || 'kg';
+    document.getElementById('delete-exercise-modal-btn').style.display = '';
     const selectedGroupIds = state.groups
         .filter(group => Array.isArray(group.exerciseIds) && group.exerciseIds.includes(id))
         .map(group => group.id);
@@ -954,28 +1864,64 @@ function getSelectedExerciseGroupIds() {
 async function onStatsTypeChange() {
     const type = document.getElementById('stats-type').value;
     const targetSelect = document.getElementById('stats-target');
+    const muscleSelect = document.getElementById('stats-muscle-target');
 
     targetSelect.innerHTML = '<option value="">全部</option>';
+    targetSelect.style.display = type === 'muscle' || type === 'exercise' ? '' : 'none';
+    if (muscleSelect) {
+        muscleSelect.style.display = type === 'exercise' ? '' : 'none';
+        muscleSelect.innerHTML = '<option value="">全部肌肉位置</option>';
+    }
+
+    if (!state.exercises.length) {
+        await loadExercises();
+    }
 
     if (type === 'muscle') {
-        // 显示肌肉群选项
-        const muscleGroups = [...new Set(state.exercises.filter(ex => ex.id > 0).map(ex => ex.muscleGroup))];
-        muscleGroups.forEach(mg => {
-            targetSelect.innerHTML += `<option value="${mg}">${mg}</option>`;
-        });
+        populateStatsMuscleOptions(targetSelect, '全部');
     } else if (type === 'exercise') {
-        // 显示动作选项
-        state.exercises.filter(ex => ex.id > 0).forEach(ex => {
-            targetSelect.innerHTML += `<option value="${ex.id}">${ex.name}</option>`;
-        });
+        if (muscleSelect) {
+            populateStatsMuscleOptions(muscleSelect, '全部肌肉位置');
+        }
+        populateStatsExerciseOptions(targetSelect, '');
     }
 
     // 自动刷新统计
     await refreshStats();
 }
 
+async function onStatsMuscleTargetChange() {
+    const targetSelect = document.getElementById('stats-target');
+    const muscle = document.getElementById('stats-muscle-target')?.value || '';
+    populateStatsExerciseOptions(targetSelect, muscle);
+    await refreshStats();
+}
+
 async function onStatsTargetChange() {
     await refreshStats();
+}
+
+function populateStatsMuscleOptions(select, placeholder) {
+    if (!select) return;
+    select.innerHTML = `<option value="">${placeholder}</option>`;
+    const muscleGroups = [...new Set(state.exercises
+        .filter(ex => ex.id > 0 && ex.muscleGroup)
+        .map(ex => ex.muscleGroup))]
+        .sort((a, b) => a.localeCompare(b, 'zh-CN'));
+    muscleGroups.forEach(muscle => {
+        select.innerHTML += `<option value="${escapeHtml(muscle)}">${escapeHtml(muscle)}</option>`;
+    });
+}
+
+function populateStatsExerciseOptions(select, muscle) {
+    if (!select) return;
+    select.innerHTML = '<option value="">全部动作</option>';
+    state.exercises
+        .filter(ex => ex.id > 0 && (!muscle || ex.muscleGroup === muscle))
+        .sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
+        .forEach(ex => {
+            select.innerHTML += `<option value="${ex.id}">${escapeHtml(ex.name)}</option>`;
+        });
 }
 
 // 简单的文本图表

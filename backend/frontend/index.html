@@ -12,6 +12,9 @@
         <nav class="nav">
             <button class="nav-btn active" data-page="training">今日训练</button>
             <button class="nav-btn" data-page="exercises">动作管理</button>
+            <button class="nav-btn" data-page="notes">笔记</button>
+            <button class="nav-btn" data-page="todos">待办</button>
+            <button class="nav-btn" data-page="challenges">挑战</button>
             <button class="nav-btn" data-page="statistics">统计分析</button>
         </nav>
 
@@ -82,6 +85,110 @@
             </div>
         </div>
 
+        <!-- 笔记页面 -->
+        <div id="page-notes" class="page">
+            <div class="header">
+                <h1>笔记</h1>
+                <div class="note-tag-create">
+                    <input type="text" id="note-tag-name" placeholder="新标签" />
+                    <button id="add-note-tag-btn" class="btn btn-primary">添加标签</button>
+                </div>
+            </div>
+
+            <div class="notes-layout">
+                <div class="note-tags-panel">
+                    <div class="section">
+                        <h2>常用标签</h2>
+                        <div id="popular-note-tags" class="note-tag-list"></div>
+                    </div>
+                    <div class="section">
+                        <h2>全部标签</h2>
+                        <div id="all-note-tags" class="note-tag-list"></div>
+                    </div>
+                </div>
+
+                <div class="note-editor-panel">
+                    <div class="note-editor-header">
+                        <h2 id="current-note-tag">选择标签</h2>
+                        <div class="note-editor-actions">
+                            <button id="new-note-btn" class="btn btn-secondary" disabled>新建笔记</button>
+                            <span id="note-save-status" class="note-save-status">未选择</span>
+                        </div>
+                    </div>
+                    <textarea id="note-content" class="note-content" disabled placeholder="选择标签后记录笔记"></textarea>
+                    <div class="note-history-panel">
+                        <div class="note-history-header">
+                            <h2>历史笔记</h2>
+                        </div>
+                        <div id="note-history-list" class="note-history-list">
+                            <p class="empty-hint">选择标签后查看历史笔记</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 待办页面 -->
+        <div id="page-todos" class="page">
+            <div class="header">
+                <h1>待办事项</h1>
+                <form id="todo-create-form" class="todo-create">
+                    <input type="text" id="todo-title" placeholder="新增待办事项" autocomplete="off" />
+                    <button type="submit" class="btn btn-primary">添加</button>
+                </form>
+            </div>
+
+            <div class="section">
+                <div class="section-title-row">
+                    <h2>待办</h2>
+                    <span id="todo-summary" class="todo-summary">0 项</span>
+                </div>
+                <div id="todo-active-list" class="todo-list">
+                    <p class="empty-hint">暂无待办事项</p>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title-row">
+                    <h2>已完成列表</h2>
+                </div>
+                <button id="show-completed-todos-btn" class="todo-completed-entry" type="button">
+                    <span>已完成列表</span>
+                    <strong id="todo-completed-count">0 项</strong>
+                </button>
+            </div>
+        </div>
+
+        <div id="page-challenges" class="page">
+            <div class="header">
+                <h1>每日挑战</h1>
+                <div class="date-display">
+                    <label>日期:</label>
+                    <input type="date" id="challenge-date" />
+                </div>
+            </div>
+
+            <div class="section challenge-create-section">
+                <h2>新建挑战</h2>
+                <form id="challenge-create-form" class="challenge-create-form">
+                    <input type="text" id="challenge-name" placeholder="挑战名称，例如：7天生活习惯" autocomplete="off" />
+                    <label class="challenge-days-label">周期 <input type="number" id="challenge-days" min="1" max="366" value="7" inputmode="numeric" /> 天</label>
+                    <textarea id="challenge-items" rows="4" placeholder="每行一个事项，例如：&#10;刷牙&#10;剪指甲&#10;读书一小时" required></textarea>
+                    <button type="submit" class="btn btn-primary">创建挑战</button>
+                </form>
+            </div>
+
+            <div class="section">
+                <div class="section-title-row">
+                    <h2>当天挑战</h2>
+                    <span id="challenge-day-summary" class="todo-summary">0 / 0 · 0%</span>
+                </div>
+                <div id="challenge-day-list" class="challenge-day-list">
+                    <p class="empty-hint">当天没有挑战事项</p>
+                </div>
+            </div>
+        </div>
+
         <!-- 统计分析页面 -->
         <div id="page-statistics" class="page">
             <div class="header">
@@ -105,8 +212,14 @@
                 <h2>筛选条件</h2>
                 <select id="stats-type">
                     <option value="overview">总览统计</option>
+                    <option value="todos">待办</option>
+                    <option value="challenges">挑战</option>
                     <option value="muscle">按肌肉群筛选</option>
                     <option value="exercise">按动作筛选</option>
+                </select>
+
+                <select id="stats-muscle-target" style="display: none;">
+                    <option value="">全部肌肉位置</option>
                 </select>
 
                 <select id="stats-target">
@@ -133,16 +246,16 @@
             </div>
 
             <div class="stats-section">
-                <h2>📅 训练日历</h2>
+                <h2>📅 日历</h2>
                 <div id="training-calendar" class="calendar-view">
-                    <!-- 训练日历 -->
+                    <!-- 日历 -->
                 </div>
             </div>
 
             <div class="stats-section">
-                <h2>📋 当天组明细</h2>
+                <h2>📋 当天明细</h2>
                 <div id="day-records" class="day-records">
-                    <p style="color: #6c757d;">点击训练日历中的日期查看当天组数</p>
+                    <p style="color: #6c757d;">点击日历中的日期查看当天明细</p>
                 </div>
             </div>
 
@@ -182,6 +295,7 @@
                     </div>
                 </div>
                 <div class="form-actions">
+                    <button type="button" id="delete-exercise-modal-btn" class="btn btn-danger">删除动作</button>
                     <button type="button" class="btn btn-secondary" onclick="closeModal('exercise-modal')">取消</button>
                     <button type="submit" class="btn btn-primary">保存</button>
                 </div>
@@ -209,6 +323,18 @@
                     <button type="submit" class="btn btn-primary">保存</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <div id="todo-completed-modal" class="modal">
+        <div class="modal-content todo-completed-modal-content">
+            <h2>已完成列表</h2>
+            <div id="todo-completed-modal-list" class="todo-completed-modal-list">
+                <p class="empty-hint">暂无已完成事项</p>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('todo-completed-modal')">关闭</button>
+            </div>
         </div>
     </div>
 

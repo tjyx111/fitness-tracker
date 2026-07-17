@@ -1,7 +1,10 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"sort"
 	"strconv"
@@ -114,50 +117,21 @@ func (s *Server) handleExercises(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		exercises, _ := s.csv.LoadExercises()
-		var updatedExercises []Exercise
-		found := false
-		for _, e := range exercises {
-			if e.ID != id {
-				updatedExercises = append(updatedExercises, e)
-			} else {
-				found = true
-			}
-		}
-
+		found, deletedRecords, deletedSessions, err := s.csv.DeleteExerciseWithData(id)
 		if !found {
 			http.Error(w, "Exercise not found", http.StatusNotFound)
 			return
 		}
-
-		if err := s.csv.SaveExercises(updatedExercises); err != nil {
+		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		groups, _ := s.csv.LoadExerciseGroups()
-		groupsChanged := false
-		for i, group := range groups {
-			var updatedIDs []int
-			for _, exerciseID := range group.ExerciseIDs {
-				if exerciseID != id {
-					updatedIDs = append(updatedIDs, exerciseID)
-				} else {
-					groupsChanged = true
-				}
-			}
-			groups[i].ExerciseIDs = updatedIDs
-		}
-		if groupsChanged {
-			if err := s.csv.SaveExerciseGroups(groups); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-		}
-
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"message": "Exercise deleted successfully",
+			"message":         "Exercise deleted successfully",
+			"deletedRecords":  deletedRecords,
+			"deletedSessions": deletedSessions,
 		})
 
 	default:
@@ -314,6 +288,333 @@ func (s *Server) handleGroups(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *Server) handleNoteTags(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		tags, err := s.csv.LoadNoteTags()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		popularTags, err := s.csv.LoadPopularNoteTags(4)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"tags":        tags,
+			"popularTags": popularTags,
+		})
+
+	case http.MethodPost:
+		var payload struct {
+			Name string `json:"name"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		name := strings.TrimSpace(payload.Name)
+		if name == "" {
+			http.Error(w, "Note tag name is required", http.StatusBadRequest)
+			return
+		}
+		tag, err := s.csv.AddNoteTag(name)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(tag)
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (s *Server) handleNoteTagActions(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	path := strings.TrimPrefix(r.URL.Path, "/api/note-tags/")
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) != 2 || parts[1] != "touch" {
+		http.Error(w, "Invalid note tag action", http.StatusBadRequest)
+		return
+	}
+	id, err := strconv.Atoi(parts[0])
+	if err != nil || id <= 0 {
+		http.Error(w, "Invalid note tag ID", http.StatusBadRequest)
+		return
+	}
+	if err := s.csv.TouchNoteTag(id); err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "Note tag touched",
+	})
+}
+
+func (s *Server) handleNotes(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		tagID, err := strconv.Atoi(r.URL.Query().Get("tagId"))
+		if err != nil || tagID <= 0 {
+			http.Error(w, "tagId is required", http.StatusBadRequest)
+			return
+		}
+		note, err := s.csv.LoadNote(tagID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(note)
+
+	case http.MethodPost, http.MethodPut:
+		var payload struct {
+			TagID   int    `json:"tagId"`
+			Content string `json:"content"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if payload.TagID <= 0 {
+			http.Error(w, "tagId is required", http.StatusBadRequest)
+			return
+		}
+		note, err := s.csv.SaveNote(payload.TagID, payload.Content)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(note)
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (s *Server) handleNewNote(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var payload struct {
+		TagID int `json:"tagId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if payload.TagID <= 0 {
+		http.Error(w, "tagId is required", http.StatusBadRequest)
+		return
+	}
+
+	note, err := s.csv.CreateNewNote(payload.TagID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	json.NewEncoder(w).Encode(note)
+}
+
+func (s *Server) handleNoteHistory(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		tagID, err := strconv.Atoi(r.URL.Query().Get("tagId"))
+		if err != nil || tagID <= 0 {
+			http.Error(w, "tagId is required", http.StatusBadRequest)
+			return
+		}
+
+		limit := 50
+		if rawLimit := r.URL.Query().Get("limit"); rawLimit != "" {
+			if parsed, err := strconv.Atoi(rawLimit); err == nil && parsed > 0 {
+				limit = parsed
+			}
+		}
+
+		history, err := s.csv.LoadNoteHistory(tagID, limit)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(history)
+
+	case http.MethodPut:
+		var payload struct {
+			ID      int    `json:"id"`
+			Content string `json:"content"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if payload.ID <= 0 {
+			http.Error(w, "history id is required", http.StatusBadRequest)
+			return
+		}
+		history, err := s.csv.UpdateNoteHistory(payload.ID, payload.Content)
+		if err != nil {
+			status := http.StatusInternalServerError
+			if errors.Is(err, sql.ErrNoRows) {
+				status = http.StatusNotFound
+			}
+			http.Error(w, err.Error(), status)
+			return
+		}
+		json.NewEncoder(w).Encode(history)
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (s *Server) handleTodos(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		items, err := s.csv.LoadTodoItems()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(items)
+
+	case http.MethodPost:
+		var payload struct {
+			Title string `json:"title"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		title := strings.TrimSpace(payload.Title)
+		if title == "" {
+			http.Error(w, "Todo title is required", http.StatusBadRequest)
+			return
+		}
+		item, err := s.csv.AddTodoItem(title)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(item)
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (s *Server) handleTodoItem(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	id, err := strconv.Atoi(strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/todos/"), "/"))
+	if err != nil || id <= 0 {
+		http.Error(w, "Invalid todo ID", http.StatusBadRequest)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodPut:
+		var payload struct {
+			Title     string `json:"title"`
+			Completed bool   `json:"completed"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		title := strings.TrimSpace(payload.Title)
+		if title == "" {
+			http.Error(w, "Todo title is required", http.StatusBadRequest)
+			return
+		}
+		item, err := s.csv.UpdateTodoItem(id, title, payload.Completed)
+		if err != nil {
+			status := http.StatusInternalServerError
+			if errors.Is(err, sql.ErrNoRows) {
+				status = http.StatusNotFound
+			}
+			http.Error(w, err.Error(), status)
+			return
+		}
+		json.NewEncoder(w).Encode(item)
+
+	case http.MethodDelete:
+		if err := s.csv.DeleteTodoItem(id); err != nil {
+			status := http.StatusInternalServerError
+			if errors.Is(err, sql.ErrNoRows) {
+				status = http.StatusNotFound
+			}
+			http.Error(w, err.Error(), status)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]string{"message": "Todo deleted"})
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
 // ========== 获取上次训练记录 ==========
 
 func (s *Server) handleGroupLastRecord(w http.ResponseWriter, r *http.Request) {
@@ -369,10 +670,20 @@ func (s *Server) handleSessionSubmit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	if err := s.validateSessionData(sessionData); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	// 加载现有数据
 	sessions, _ := s.csv.LoadTrainingSessions()
 	records, _ := s.csv.LoadTrainingRecords()
+	maxRecordID := 0
+	for _, record := range records {
+		if record.RecordID > maxRecordID {
+			maxRecordID = record.RecordID
+		}
+	}
 	sessionDateByID := make(map[int]string)
 	for _, session := range sessions {
 		sessionDateByID[session.SessionID] = session.Date
@@ -420,43 +731,42 @@ func (s *Server) handleSessionSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 生成新session ID
-	maxSessionID := 0
-	for _, s := range sessions {
-		if s.SessionID > maxSessionID {
-			maxSessionID = s.SessionID
-		}
-	}
-	newSessionID := maxSessionID + 1
-
 	durationMinutes := sessionData.DurationMinutes
 	if durationMinutes <= 0 {
 		durationMinutes = 40
 	}
 
-	// 创建session
-	session := TrainingSession{
-		SessionID:       newSessionID,
-		GroupID:         sessionData.GroupID,
-		Date:            sessionData.Date,
-		Status:          "completed",
-		DurationMinutes: durationMinutes,
-	}
-	sessions = append(sessions, session)
-
-	// 生成record ID并保存records
-	maxRecordID := 0
-	for _, r := range records {
-		if r.RecordID > maxRecordID {
-			maxRecordID = r.RecordID
+	// 优先复用同一天同动作组已有 session，支持单动作逐个保存。
+	targetSessionID := 0
+	maxSessionID := 0
+	for i, session := range sessions {
+		if session.SessionID > maxSessionID {
+			maxSessionID = session.SessionID
+		}
+		if session.Date == sessionData.Date && session.GroupID == sessionData.GroupID && session.SessionID > targetSessionID {
+			targetSessionID = session.SessionID
+			sessions[i].DurationMinutes = durationMinutes
+			sessions[i].Status = "completed"
 		}
 	}
+	if targetSessionID == 0 {
+		targetSessionID = maxSessionID + 1
+		sessions = append(sessions, TrainingSession{
+			SessionID:       targetSessionID,
+			GroupID:         sessionData.GroupID,
+			Date:            sessionData.Date,
+			Status:          "completed",
+			DurationMinutes: durationMinutes,
+		})
+	}
 
+	// Use IDs greater than every pre-existing record. Reusing IDs from the
+	// filtered slice can collide with the unique session/exercise/set key.
 	for _, exRecord := range sessionData.ExerciseRecords {
 		for _, set := range exRecord.Sets {
 			maxRecordID++
 			set.RecordID = maxRecordID
-			set.SessionID = newSessionID
+			set.SessionID = targetSessionID
 			set.ExerciseID = exRecord.ExerciseID
 			records = append(records, set)
 		}
@@ -470,9 +780,52 @@ func (s *Server) handleSessionSubmit(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"sessionId": newSessionID,
+		"sessionId": targetSessionID,
 		"message":   "Training session saved successfully",
 	})
+}
+
+func (s *Server) validateSessionData(sessionData SessionData) error {
+	if sessionData.Date == "" {
+		return errors.New("训练日期不能为空")
+	}
+	if sessionData.GroupID <= 0 {
+		return errors.New("训练动作组无效")
+	}
+
+	groups, err := s.csv.LoadExerciseGroups()
+	if err != nil {
+		return fmt.Errorf("加载动作组失败: %w", err)
+	}
+	groupExists := false
+	for _, group := range groups {
+		if group.ID == sessionData.GroupID {
+			groupExists = true
+			break
+		}
+	}
+	if !groupExists {
+		return fmt.Errorf("训练动作组不存在: %d", sessionData.GroupID)
+	}
+
+	exercises, err := s.csv.LoadExercises()
+	if err != nil {
+		return fmt.Errorf("加载动作失败: %w", err)
+	}
+	exerciseExists := make(map[int]bool, len(exercises))
+	for _, exercise := range exercises {
+		exerciseExists[exercise.ID] = true
+	}
+	for _, record := range sessionData.ExerciseRecords {
+		if record.ExerciseID <= 0 {
+			return errors.New("训练动作无效")
+		}
+		if !exerciseExists[record.ExerciseID] {
+			return fmt.Errorf("训练动作不存在或已被删除，请刷新页面后重试: %d", record.ExerciseID)
+		}
+	}
+
+	return nil
 }
 
 // ========== 查询某天某动作组训练记录 ==========

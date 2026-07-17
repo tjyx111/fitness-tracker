@@ -2,6 +2,23 @@
 
 ## 启动流程
 
+## 远端登录规则
+
+需要通过 JumpServer/xssh 登录远端机器时，Google Authenticator/TOTP code
+使用 `~/.bashrc` 中的 `jpcode` 命令生成。不要使用缓存 code 或手工记忆的
+code。
+
+固定命令：
+
+```bash
+JUMP_TOTP_CODE="$(bash -ic 'jpcode' 2>/dev/null | tail -n 1)"
+```
+
+如果没有登录成功，优先按“`jpcode` 没有加载或 code 已过期”处理：重新执行
+固定命令生成 code，并且只做一次新的登录尝试。
+不得把 TOTP secret、生成出的 code、JumpServer 密码或 xssh 密码写入仓库、提交、
+日志摘要或用户可见文档。
+
 ### 本地开发
 
 在仓库根目录运行：
@@ -12,10 +29,8 @@
 
 `start.sh` 会执行以下操作：
 
-1. 如果根目录的 `.fitness-tracker.env` 不存在，则生成一次 32 字节随机 `SYNC_TOKEN` 并以 `600` 权限保存。
-2. 如果 token 文件已经存在，则读取并复用，启动时不得重新生成。
-3. 将根目录 `frontend/` 同步到 `backend/frontend/`。
-4. 在 `backend/` 中执行 `go run -buildvcs=false .`。
+1. 将根目录 `frontend/` 同步到 `backend/frontend/`。
+2. 在 `backend/` 中执行 `go run -buildvcs=false .`。
 
 本地默认监听 `0.0.0.0:8080`，默认数据库位于 `backend/data/fitness.db`。可通过 `LISTEN_ADDR`、`DATA_DIR` 等环境变量覆盖。
 
@@ -31,19 +46,18 @@
 SKIP_UPLOAD=1 ./package_release.sh
 ```
 
-发布包包含 token 读取脚本，但绝不能包含 `.fitness-tracker.env` 或真实 token。
+发布包不得包含 `.fitness-tracker.env` 或真实 token。
 
 ### 云端首次部署
 
-将发布包解压到云主机后，先把本地生成的同一个 token 配置到云端：
+将发布包解压到云主机后启动服务：
 
 ```bash
 chmod +x fitness-tracker start_cloud.sh sync_from_cloud.sh
-SYNC_TOKEN='本地生成的token' ./start_cloud.sh configure-token
 ./start_cloud.sh start
 ```
 
-`configure-token` 会在云端脚本目录生成权限为 `600` 的 `.fitness-tracker.env`。后续使用以下命令管理服务，无需重新配置 token：
+后续使用以下命令管理服务：
 
 ```bash
 ./start_cloud.sh status
@@ -61,25 +75,21 @@ SYNC_TOKEN='本地生成的token' ./start_cloud.sh configure-token
 ./sync_from_cloud.sh
 ```
 
-脚本自动读取根目录 `.fitness-tracker.env`，从云端下载一致的 SQLite 快照，执行 `PRAGMA integrity_check`，备份现有本地数据库后再替换。可用 `CLOUD_URL` 和 `LOCAL_DB` 覆盖默认地址及目标路径。
+脚本从云端下载一致的 SQLite 快照，执行 `PRAGMA integrity_check`，备份现有本地数据库后再替换，然后将 `backend/data/fitness.db` 提交并推送到当前 Git 仓库。可用 `CLOUD_URL` 和 `LOCAL_DB` 覆盖默认地址及目标路径；可用 `GIT_COMMIT=0` 跳过提交，`GIT_PUSH=0` 跳过推送，`GIT_REMOTE` 和 `GIT_REF` 覆盖推送目标。
 
 ## 关键决策
 
-- `SYNC_TOKEN` 是长期共享密钥：本地只生成一次，云端服务端与本地同步客户端必须使用同一个值。仅在泄露或主动轮换时重新生成。
-- 环境变量 `SYNC_TOKEN` 优先于 token 文件；正常持久化使用脚本目录下的 `.fitness-tracker.env`。该文件权限必须为 `600`，已被 `.gitignore` 排除，严禁提交、打包、写入日志或文档。
-- 云端启动必须存在 `SYNC_TOKEN`；未配置时 `start_cloud.sh` 应拒绝启动，避免同步接口在错误配置下运行。
-- token 只授权下载完整数据库，因此泄露应按数据库泄露处理并立即轮换。本文件和示例中不得记录真实 token。
+- 同步接口不做应用层认证，任何能访问 `/api/sync/database` 的客户端都可以下载完整 SQLite 数据库。必须通过网络层限制访问范围，例如内网、VPN、SSH 隧道、防火墙或反向代理 ACL。
 - 当前同步方向是云端到本地的单向覆盖，不进行双向合并。同步前会备份本地数据库，但本地未上传的数据仍可能因覆盖而从工作数据库中消失。
 - 云端通过 SQLite `VACUUM INTO` 生成一致快照，以支持数据库处于 WAL 模式或服务仍在写入的场景；本地替换数据库时服务必须停止。
-- 当前默认 `CLOUD_URL` 使用 HTTP，Bearer token 在不可信网络上不安全。生产环境应使用 HTTPS、VPN 或 SSH 隧道；在完成传输层保护前，不应通过公网明文同步。
-- 不要把 `export SYNC_TOKEN=...` 作为云端唯一配置方式，因为进程或主机重启后环境变量可能丢失；使用 `configure-token` 持久化。
+- 当前默认 `CLOUD_URL` 使用 HTTP，生产环境应使用 HTTPS、VPN 或 SSH 隧道；在完成传输层保护前，不应通过公网明文同步。
 
 ## 验证要求
 
-修改启动、同步或 token 逻辑后至少运行：
+修改启动或同步逻辑后至少运行：
 
 ```bash
-bash -n start.sh start_cloud.sh sync_from_cloud.sh sync_token_env.sh package_release.sh
+bash -n start.sh start_cloud.sh sync_from_cloud.sh package_release.sh
 cd backend
 GOCACHE=/tmp/go-build-cache go test ./...
 ```

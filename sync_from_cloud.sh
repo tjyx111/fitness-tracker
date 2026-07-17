@@ -2,16 +2,12 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
-APP_DIR="$ROOT_DIR"
-# shellcheck source=sync_token_env.sh
-source "$APP_DIR/sync_token_env.sh"
 CLOUD_URL="${CLOUD_URL:-http://183.36.16.116:19797}"
 LOCAL_DB="${LOCAL_DB:-$ROOT_DIR/backend/data/fitness.db}"
-
-if ! load_sync_token; then
-  echo "SYNC_TOKEN is required in the environment or $SYNC_TOKEN_FILE"
-  exit 1
-fi
+GIT_COMMIT="${GIT_COMMIT:-1}"
+GIT_PUSH="${GIT_PUSH:-1}"
+GIT_REMOTE="${GIT_REMOTE:-origin}"
+GIT_REF="${GIT_REF:-HEAD}"
 
 if ! command -v curl >/dev/null 2>&1; then
   echo "curl is required"
@@ -38,7 +34,6 @@ trap 'rm -f "$TEMP_DB"' EXIT
 
 curl --fail --silent --show-error \
   --noproxy "${NO_PROXY_HOSTS:-*}" \
-  --header "Authorization: Bearer $SYNC_TOKEN" \
   --output "$TEMP_DB" \
   "${CLOUD_URL%/}/api/sync/database"
 
@@ -59,3 +54,26 @@ rm -f "${LOCAL_DB}-wal" "${LOCAL_DB}-shm"
 mv "$TEMP_DB" "$LOCAL_DB"
 trap - EXIT
 echo "Cloud database synchronized to: $LOCAL_DB"
+
+if [ "$GIT_COMMIT" = "1" ]; then
+  if ! command -v git >/dev/null 2>&1; then
+    echo "git is required when GIT_COMMIT=1"
+    exit 1
+  fi
+
+  cd "$ROOT_DIR"
+  REL_DB="$(realpath --relative-to="$ROOT_DIR" "$LOCAL_DB")"
+  git add -f "$REL_DB"
+
+  if git diff --cached --quiet -- "$REL_DB"; then
+    echo "No database changes to commit."
+  else
+    git commit -m "sync fitness database $(date +%Y-%m-%dT%H:%M:%S%z)" -- "$REL_DB"
+    echo "Database committed to git: $REL_DB"
+
+    if [ "$GIT_PUSH" = "1" ]; then
+      git push "$GIT_REMOTE" "$GIT_REF"
+      echo "Database pushed to git remote: $GIT_REMOTE $GIT_REF"
+    fi
+  fi
+fi

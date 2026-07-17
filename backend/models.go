@@ -106,3 +106,37 @@ type MuscleProgress struct {
 	MuscleGroup string         `json:"muscleGroup"`
 	Exercises   []ProgressData `json:"exercises"`
 }
+
+type NoteTag struct {
+	ID        int    `json:"id"`
+	Name      string `json:"name"`
+	UseCount  int    `json:"useCount"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
+}
+
+type Note struct {
+	ID        int    `json:"id"`
+	TagID     int    `json:"tagId"`
+	Content   string `json:"content"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
+}
+
+type NoteHistory struct {
+	ID        int    `json:"id"`
+	TagID     int    `json:"tagId"`
+	Summary   string `json:"summary"`
+	Content   string `json:"content"`
+	CreatedAt string `json:"createdAt"`
+}
+
+type TodoItem struct {
+	ID          int    `json:"id"`
+	Title       string `json:"title"`
+	StartAt     string `json:"startAt"`
+	Completed   bool   `json:"completed"`
+	CompletedAt string `json:"completedAt"`
+	CreatedAt   string `json:"createdAt"`
+	UpdatedAt   string `json:"updatedAt"`
+}

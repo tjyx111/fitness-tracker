@@ -2,8 +2,6 @@
 set -euo pipefail
 
 APP_DIR="$(cd "$(dirname "$0")" && pwd)"
-# shellcheck source=sync_token_env.sh
-source "$APP_DIR/sync_token_env.sh"
 BIN="${BIN:-$APP_DIR/fitness-tracker}"
 if [ ! -x "$BIN" ] && [ -x "$APP_DIR/backend/fitness-tracker" ]; then
   BIN="$APP_DIR/backend/fitness-tracker"
@@ -15,12 +13,6 @@ LOG_FILE="${LOG_FILE:-$APP_DIR/fitness-tracker.log}"
 PID_FILE="${PID_FILE:-$APP_DIR/fitness-tracker.pid}"
 
 start() {
-  if ! load_sync_token; then
-    echo "SYNC_TOKEN is not configured."
-    echo "Set it once with: SYNC_TOKEN=... $0 configure-token"
-    exit 1
-  fi
-
   if [ ! -x "$BIN" ]; then
     echo "Binary not found or not executable: $BIN"
     exit 1
@@ -32,7 +24,7 @@ start() {
   fi
 
   mkdir -p "$DATA_DIR"
-  nohup env DATA_DIR="$DATA_DIR" LISTEN_ADDR="$LISTEN_ADDR" SYNC_TOKEN="$SYNC_TOKEN" "$BIN" > "$LOG_FILE" 2>&1 &
+  nohup env DATA_DIR="$DATA_DIR" LISTEN_ADDR="$LISTEN_ADDR" "$BIN" > "$LOG_FILE" 2>&1 &
   echo $! > "$PID_FILE"
   echo "fitness-tracker started"
   echo "pid: $(cat "$PID_FILE")"
@@ -65,15 +57,6 @@ status() {
   fi
 }
 
-configure_token() {
-  if [ -z "${SYNC_TOKEN:-}" ]; then
-    echo "SYNC_TOKEN is required: SYNC_TOKEN=... $0 configure-token"
-    exit 1
-  fi
-  save_sync_token
-  echo "Sync token saved to: $SYNC_TOKEN_FILE"
-}
-
 case "${1:-start}" in
   start)
     start
@@ -88,11 +71,8 @@ case "${1:-start}" in
   status)
     status
     ;;
-  configure-token)
-    configure_token
-    ;;
   *)
-    echo "Usage: $0 {start|stop|restart|status|configure-token}"
+    echo "Usage: $0 {start|stop|restart|status}"
     exit 1
     ;;
 esac

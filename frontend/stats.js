@@ -9,10 +9,17 @@ async function loadStatistics() {
     const days = document.getElementById('stats-period').value;
     const statsType = document.getElementById('stats-type').value;
     const statsTarget = document.getElementById('stats-target').value;
+    const statsMuscleTarget = document.getElementById('stats-muscle-target')?.value || '';
 
     try {
-        if (statsType === 'exercise' && statsTarget) {
+        if (statsType === 'todos') {
+            await loadTodoStats(days);
+        } else if (statsType === 'challenges') {
+            await loadChallengeStats(days);
+        } else if (statsType === 'exercise' && statsTarget) {
             await loadExerciseStats(statsTarget, days);
+        } else if (statsType === 'exercise' && statsMuscleTarget) {
+            await loadMuscleStats(statsMuscleTarget, days);
         } else if (statsType === 'muscle' && statsTarget) {
             await loadMuscleStats(statsTarget, days);
         } else {
@@ -26,6 +33,315 @@ async function loadStatistics() {
 // 加载总览统计
 async function loadOverviewStats(days) {
     await loadFilteredStats('overview', '', days, `最近${days}天训练情况`);
+}
+
+async function loadTodoStats(days) {
+    const todos = await fetch(`${API_BASE}/todos`).then(r => r.json());
+    renderTodoStats(todos || []);
+    hideExerciseTrendChart();
+    renderTodoCalendar(todos || [], parseInt(days, 10) || 30);
+    resetTodoDayRecords();
+}
+
+async function loadChallengeStats(days) {
+    const response = await fetch(`${API_BASE}/stats/challenges?days=${encodeURIComponent(days)}`);
+    if (!response.ok) throw new Error(await response.text());
+    const stats = await response.json();
+    renderChallengeStats(stats);
+    hideExerciseTrendChart();
+    renderChallengeCalendar(stats.daily || [], parseInt(days, 10) || 30);
+    resetChallengeDayRecords();
+}
+
+function renderChallengeStats(stats) {
+    const dashboard = document.querySelector('.stats-dashboard');
+    const percent = Math.round(stats.completionPercent || 0);
+    dashboard.innerHTML = `
+        <div class="stat-item">
+            <h4>挑战完成度</h4>
+            <p>已完成: <strong>${stats.completedItems || 0} / ${stats.totalItems || 0}</strong></p>
+            <p>总体完成度: <strong>${percent}%</strong></p>
+        </div>
+        <div class="stat-item">
+            <h4>挑战事项统计</h4>
+            <div class="challenge-stats-items">
+                ${(stats.itemStats || []).length
+                    ? stats.itemStats.map(item => `<p><span>${escapeHtml(item.title)}</span><strong>${item.completedDays} / ${item.totalDays} · ${Math.round(item.completionPercent)}%</strong></p>`).join('')
+                    : '<p>当前周期没有挑战事项</p>'}
+            </div>
+        </div>
+    `;
+}
+
+function renderChallengeCalendar(daily, days) {
+    const container = document.getElementById('training-calendar');
+    if (!container) return;
+
+    const dayByDate = new Map((daily || []).map(day => [day.date, day]));
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const start = new Date(today);
+    start.setDate(start.getDate() - Math.max(1, days) + 1);
+    const calendarDays = [];
+    for (let date = new Date(start); date <= today; date.setDate(date.getDate() + 1)) {
+        const key = formatLocalDate(date);
+        const item = dayByDate.get(key);
+        calendarDays.push({
+            date: key,
+            totalItems: item?.totalItems || 0,
+            completedItems: item?.completedItems || 0,
+            completionPercent: item?.completionPercent || 0
+        });
+    }
+    const trackedDays = calendarDays.filter(day => day.totalItems > 0);
+    const completedItems = trackedDays.reduce((sum, day) => sum + day.completedItems, 0);
+    const totalItems = trackedDays.reduce((sum, day) => sum + day.totalItems, 0);
+    const todayKey = formatLocalDate(today);
+
+    container.innerHTML = `
+        <div class="heatmap-header">
+            <div>
+                <h3>最近${days}天挑战每日完成程度</h3>
+                <p>${completedItems} / ${totalItems} 项完成 · 每日范围 0% 至 100%</p>
+            </div>
+            <div class="heatmap-legend" aria-label="挑战完成度图例">
+                <span>0%</span>
+                <span class="legend-square level-0"></span>
+                <span class="legend-square level-1"></span>
+                <span class="legend-square level-2"></span>
+                <span class="legend-square level-3"></span>
+                <span class="legend-square level-4"></span>
+                <span>100%</span>
+            </div>
+        </div>
+        <div class="heatmap-grid">
+            ${calendarDays.map(day => {
+                const level = day.totalItems ? getChallengeHeatmapLevel(day.completionPercent) : 0;
+                const title = day.totalItems
+                    ? `${day.date}: ${day.completedItems} / ${day.totalItems} · ${Math.round(day.completionPercent)}%`
+                    : `${day.date}: 无挑战事项`;
+                return `<div class="heatmap-day level-${level} ${day.date === todayKey ? 'today' : ''}" data-date="${day.date}" title="${title}"><span>${Number(day.date.slice(-2))}</span></div>`;
+            }).join('')}
+        </div>
+    `;
+
+    container.querySelectorAll('.heatmap-day').forEach(dayElement => {
+        dayElement.addEventListener('click', async () => {
+            container.querySelectorAll('.heatmap-day').forEach(item => item.classList.remove('selected'));
+            dayElement.classList.add('selected');
+            await loadChallengeDayRecords(dayElement.dataset.date);
+        });
+    });
+}
+
+function getChallengeHeatmapLevel(percent) {
+    if (percent <= 0) return 0;
+    if (percent <= 25) return 1;
+    if (percent <= 50) return 2;
+    if (percent <= 75) return 3;
+    return 4;
+}
+
+async function loadChallengeDayRecords(date) {
+    const container = document.getElementById('day-records');
+    try {
+        const response = await fetch(`${API_BASE}/challenges?date=${encodeURIComponent(date)}`);
+        if (!response.ok) throw new Error(await response.text());
+        const days = await response.json();
+        if (!days.length) {
+            container.innerHTML = `<p style="color: #6c757d;">${date} 没有挑战事项</p>`;
+            return;
+        }
+        container.innerHTML = `
+            <div class="day-records-header"><h3>${date}</h3></div>
+            <div class="challenge-day-list">
+                ${days.map(day => `
+                    <section class="challenge-card compact">
+                        <div class="challenge-card-header"><h3>${escapeHtml(day.challengeName)}</h3><p>${day.completedItems} / ${day.totalItems} · ${Math.round(day.completionPercent)}%</p></div>
+                        <div class="challenge-items-list">${day.items.map(item => `<div class="challenge-item ${item.completed ? 'completed' : ''}"><span>${item.completed ? '已完成' : '未完成'}</span><span>${escapeHtml(item.title)}</span></div>`).join('')}</div>
+                    </section>
+                `).join('')}
+            </div>
+        `;
+    } catch (error) {
+        console.error('Failed to load challenge day records:', error);
+        container.innerHTML = '<p style="color: #6c757d;">挑战明细加载失败</p>';
+    }
+}
+
+function resetChallengeDayRecords() {
+    const container = document.getElementById('day-records');
+    if (container) {
+        container.innerHTML = '<p style="color: #6c757d;">点击日历中的日期查看当天挑战明细</p>';
+    }
+}
+
+function renderTodoStats(todos) {
+    const dashboard = document.querySelector('.stats-dashboard');
+    const completed = todos.filter(item => item.completed);
+    const open = todos.filter(item => !item.completed);
+    const durations = completed
+        .map(getTodoCompletionDurationMs)
+        .filter(value => Number.isFinite(value) && value >= 0)
+        .sort((a, b) => a - b);
+
+    dashboard.innerHTML = `
+        <div class="stat-item">
+            <h4>待办总体统计</h4>
+            <p>已完成: <strong>${completed.length}项</strong></p>
+            <p>未完成: <strong>${open.length}项</strong></p>
+        </div>
+        <div class="stat-item">
+            <h4>任务完成时间</h4>
+            <p>P50: <strong>${formatTodoDuration(percentileValue(durations, 50))}</strong></p>
+            <p>P95: <strong>${formatTodoDuration(percentileValue(durations, 95))}</strong></p>
+            <p>P99: <strong>${formatTodoDuration(percentileValue(durations, 99))}</strong></p>
+        </div>
+    `;
+}
+
+function getTodoCompletionDurationMs(item) {
+    if (!item.completedAt) {
+        return NaN;
+    }
+    const end = new Date(item.completedAt).getTime();
+    const startSource = item.startAt || item.createdAt;
+    const start = new Date(startSource).getTime();
+    if (!Number.isFinite(start) || !Number.isFinite(end)) {
+        return NaN;
+    }
+    return Math.max(0, end - start);
+}
+
+function percentileValue(sortedValues, percentile) {
+    if (!sortedValues.length) {
+        return NaN;
+    }
+    const index = Math.min(sortedValues.length - 1, Math.max(0, Math.ceil((percentile / 100) * sortedValues.length) - 1));
+    return sortedValues[index];
+}
+
+function formatTodoDuration(ms) {
+    if (!Number.isFinite(ms)) {
+        return '-';
+    }
+    const totalMinutes = Math.round(ms / 60000);
+    const days = Math.floor(totalMinutes / 1440);
+    const hours = Math.floor((totalMinutes % 1440) / 60);
+    const minutes = totalMinutes % 60;
+    if (days > 0) {
+        return `${days}天${hours}小时`;
+    }
+    if (hours > 0) {
+        return `${hours}小时${minutes}分钟`;
+    }
+    return `${minutes}分钟`;
+}
+
+function renderTodoCalendar(todos, days) {
+    const container = document.getElementById('training-calendar');
+    if (!container) return;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const start = new Date(today);
+    start.setDate(start.getDate() - Math.max(1, days) + 1);
+
+    const completedByDate = new Map();
+    todos.filter(item => item.completed && item.completedAt).forEach(item => {
+        const completedDate = new Date(item.completedAt);
+        if (Number.isNaN(completedDate.getTime()) || completedDate < start || completedDate > new Date(today.getTime() + 86400000 - 1)) {
+            return;
+        }
+        const key = formatLocalDate(completedDate);
+        if (!completedByDate.has(key)) {
+            completedByDate.set(key, []);
+        }
+        completedByDate.get(key).push(item);
+    });
+
+    const calendarDays = [];
+    for (let date = new Date(start); date <= today; date.setDate(date.getDate() + 1)) {
+        const key = formatLocalDate(date);
+        const count = completedByDate.get(key)?.length || 0;
+        calendarDays.push({
+            date: key,
+            count,
+            level: getHeatmapLevel(count)
+        });
+    }
+
+    const completedDays = calendarDays.filter(day => day.count > 0).length;
+    const totalCompleted = calendarDays.reduce((sum, day) => sum + day.count, 0);
+    const todayKey = formatLocalDate(today);
+
+    container.innerHTML = `
+        <div class="heatmap-header">
+            <div>
+                <h3>最近${days}天待办完成情况</h3>
+                <p>${completedDays} 天完成 · ${totalCompleted} 项已完成</p>
+            </div>
+            <div class="heatmap-legend" aria-label="待办完成数量图例">
+                <span>少</span>
+                <span class="legend-square level-0"></span>
+                <span class="legend-square level-1"></span>
+                <span class="legend-square level-2"></span>
+                <span class="legend-square level-3"></span>
+                <span class="legend-square level-4"></span>
+                <span>多</span>
+            </div>
+        </div>
+        <div class="heatmap-grid">
+            ${calendarDays.map(day => {
+                const titleText = `${day.date}: ${day.count}项已完成`;
+                return `
+                    <div class="heatmap-day level-${day.level} ${day.date === todayKey ? 'today' : ''}" data-date="${day.date}" title="${titleText}">
+                        <span>${Number(day.date.slice(-2))}</span>
+                    </div>
+                `;
+            }).join('')}
+        </div>
+    `;
+
+    container.querySelectorAll('.heatmap-day').forEach(dayElement => {
+        dayElement.addEventListener('click', () => {
+            container.querySelectorAll('.heatmap-day').forEach(item => item.classList.remove('selected'));
+            dayElement.classList.add('selected');
+            renderTodoDayRecords(dayElement.dataset.date, completedByDate.get(dayElement.dataset.date) || []);
+        });
+    });
+}
+
+function resetTodoDayRecords() {
+    const container = document.getElementById('day-records');
+    if (container) {
+        container.innerHTML = '<p style="color: #6c757d;">点击日历中的日期查看当天完成待办</p>';
+    }
+}
+
+function renderTodoDayRecords(date, items) {
+    const container = document.getElementById('day-records');
+    if (!container) return;
+    if (!items.length) {
+        container.innerHTML = `<p style="color: #6c757d;">${date} 暂无已完成待办</p>`;
+        return;
+    }
+
+    container.innerHTML = `
+        <div class="day-records-header">
+            <h3>${date}</h3>
+        </div>
+        <div class="todo-list">
+            ${items.map(item => `
+                <div class="todo-item completed">
+                    <div class="todo-main">
+                        <div class="todo-title">${escapeHtml(item.title)}</div>
+                        <div class="todo-time">${formatTodoMeta(item)}</div>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    `;
 }
 
 // 加载单个动作统计
@@ -96,6 +412,7 @@ function renderFilteredStats(stats) {
     const dashboard = document.querySelector('.stats-dashboard');
     const overall = stats?.overallStats || {};
     const best = stats?.bestPerformance || {};
+    const bestLines = renderBestPerformanceLines(best);
 
     dashboard.innerHTML = `
         <div class="stat-item">
@@ -106,10 +423,27 @@ function renderFilteredStats(stats) {
         <div class="stat-item">
             <h4>最佳表现</h4>
             <p>最大组数: <strong>${formatMaxSets(best.maxSets)}</strong></p>
-            <p>最大容量: <strong>${formatBestSet(best.maxVolume, 'volume')}</strong></p>
-            <p>最大持续时间: <strong>${formatBestSet(best.maxDuration, 'duration')}</strong></p>
+            ${bestLines || '<p>暂无最佳表现</p>'}
         </div>
     `;
+}
+
+function renderBestPerformanceLines(best) {
+    const lines = [];
+    if (hasBestSet(best.maxWeight)) {
+        lines.push(`<p>最大重量: <strong>${formatBestSet(best.maxWeight)}</strong></p>`);
+    }
+    if (hasBestSet(best.maxReps)) {
+        lines.push(`<p>最大次数: <strong>${formatBestSet(best.maxReps)}</strong></p>`);
+    }
+    if (hasBestSet(best.maxDuration)) {
+        lines.push(`<p>最大持续时间: <strong>${formatBestSet(best.maxDuration)}</strong></p>`);
+    }
+    return lines.join('');
+}
+
+function hasBestSet(record) {
+    return record && record.date && record.exerciseName && Number(record.value || 0) > 0;
 }
 
 function formatMaxSets(maxSets) {
@@ -119,15 +453,28 @@ function formatMaxSets(maxSets) {
     return `${maxSets.sets}组 (${maxSets.date})`;
 }
 
-function formatBestSet(record, mode) {
+function formatBestSet(record) {
     if (!record || !record.date || !record.exerciseName) {
         return '-';
     }
 
-    const value = mode === 'duration'
-        ? `${Math.round(record.value || 0)}秒`
-        : formatRawValue(record.value || 0, record.unit);
+    const value = formatBestSetValue(record);
     return `${value} · ${record.exerciseName} 第${record.setNumber}组 (${record.date})`;
+}
+
+function formatBestSetValue(record) {
+    if (record.unit === 'duration') {
+        return `${Math.round(record.duration || record.value || 0)}秒`;
+    }
+    if (record.unit === 'reps') {
+        return `${Math.round(record.reps || record.value || 0)}次`;
+    }
+    return `${formatNumber(record.weight || record.value || 0)}kg`;
+}
+
+function formatNumber(value) {
+    const numeric = Number(value || 0);
+    return Number.isInteger(numeric) ? String(numeric) : numeric.toFixed(1);
 }
 
 function formatRawValue(value, unit) {
@@ -241,7 +588,7 @@ function hideExerciseTrendChart() {
 function resetDayRecords() {
     const container = document.getElementById('day-records');
     if (container) {
-        container.innerHTML = '<p style="color: #6c757d;">点击训练日历中的日期查看当天组数</p>';
+        container.innerHTML = '<p style="color: #6c757d;">点击日历中的日期查看当天明细</p>';
     }
 }
 
@@ -515,7 +862,14 @@ async function loadDayRecords(date) {
 function getCurrentStatsFilter() {
     const statsType = document.getElementById('stats-type').value;
     const statsTarget = document.getElementById('stats-target').value;
-    if ((statsType === 'exercise' || statsType === 'muscle') && statsTarget) {
+    const statsMuscleTarget = document.getElementById('stats-muscle-target')?.value || '';
+    if (statsType === 'exercise' && statsTarget) {
+        return { type: statsType, target: statsTarget };
+    }
+    if (statsType === 'exercise' && statsMuscleTarget) {
+        return { type: 'muscle', target: statsMuscleTarget };
+    }
+    if (statsType === 'muscle' && statsTarget) {
         return { type: statsType, target: statsTarget };
     }
     return { type: 'overview', target: '' };

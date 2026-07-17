@@ -54,7 +54,6 @@ mkdir -p "$PACKAGE_DIR"
 cp "$ROOT_DIR/fitness-tracker" "$PACKAGE_DIR/$APP_NAME"
 cp "$ROOT_DIR/start_cloud.sh" "$PACKAGE_DIR/start_cloud.sh"
 cp "$ROOT_DIR/sync_from_cloud.sh" "$PACKAGE_DIR/sync_from_cloud.sh"
-cp "$ROOT_DIR/sync_token_env.sh" "$PACKAGE_DIR/sync_token_env.sh"
 chmod +x "$PACKAGE_DIR/$APP_NAME" "$PACKAGE_DIR/start_cloud.sh" "$PACKAGE_DIR/sync_from_cloud.sh"
 
 echo "Copying data directory..."
@@ -79,14 +78,10 @@ cat > "$PACKAGE_DIR/README_DEPLOY.txt" <<EOF
 覆盖监听地址:
   LISTEN_ADDR=0.0.0.0:8080 ./start_cloud.sh start
 
-首次配置云端同步 token（使用本地 .fitness-tracker.env 中的值）:
-  SYNC_TOKEN=your-local-token ./start_cloud.sh configure-token
-
-启动云端服务（后续重启会自动读取保存的 token）:
+启动云端服务:
   ./start_cloud.sh start
 
-从另一台机器拉取数据库（先停止该机器上的服务）:
-  # 自动读取脚本目录中的 .fitness-tracker.env
+从另一台机器拉取数据库并提交到 Git（先停止该机器上的服务）:
   ./sync_from_cloud.sh
 
 停止:

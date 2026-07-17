@@ -146,17 +146,17 @@ body {
     color: white;
 }
 
-.btn-secondary:hover {
-    background: #5a6268;
-}
-
 .btn-danger {
     background: #dc3545;
     color: white;
 }
 
 .btn-danger:hover {
-    background: #c82333;
+    background: #bb2d3b;
+}
+
+.btn-secondary:hover {
+    background: #5a6268;
 }
 
 .btn-sm {
@@ -357,6 +357,31 @@ body {
     background: #e2e7ec;
 }
 
+.save-exercise-btn {
+    padding: 6px 12px;
+    min-height: 40px;
+    background: #667eea;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.save-exercise-btn:hover {
+    background: #5268d8;
+}
+
+.save-exercise-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.75;
+}
+
+.exercise-card-saved {
+    border-color: #6fcf97;
+    box-shadow: 0 0 0 2px rgba(111, 207, 151, 0.18);
+}
+
 .sets-list {
     display: flex;
     flex-direction: column;
@@ -474,6 +499,45 @@ body {
     background: #f8f9fa;
 }
 
+.management-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.management-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    padding: 14px;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    background: #fff;
+}
+
+.management-info {
+    min-width: 0;
+}
+
+.management-title {
+    color: #333;
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.management-meta {
+    color: #6c757d;
+    font-size: 13px;
+}
+
+.management-actions {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 8px;
+}
+
 /* 弹窗 */
 .modal {
     display: none;
@@ -555,6 +619,480 @@ body {
     display: flex;
     justify-content: flex-end;
     gap: 10px;
+}
+
+.note-tag-create {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.note-tag-create input {
+    min-height: 44px;
+    width: 180px;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+.notes-layout {
+    display: grid;
+    grid-template-columns: 300px minmax(0, 1fr);
+    gap: 24px;
+    align-items: start;
+}
+
+.note-tags-panel .section {
+    margin-bottom: 20px;
+}
+
+.note-tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.note-tag-btn {
+    min-height: 38px;
+    padding: 8px 12px;
+    border: 1px solid #d8dce2;
+    border-radius: 6px;
+    background: #f8f9fa;
+    color: #333;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.note-tag-btn.active {
+    border-color: #667eea;
+    background: #eef1ff;
+    color: #4d5fd3;
+    font-weight: 600;
+}
+
+.note-editor-panel {
+    min-height: 520px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.note-editor-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+.note-editor-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.note-save-status {
+    color: #6c757d;
+    font-size: 14px;
+}
+
+.note-content {
+    width: 100%;
+    min-height: 460px;
+    resize: vertical;
+    padding: 14px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 16px;
+    line-height: 1.6;
+    font-family: inherit;
+}
+
+.note-content:disabled {
+    background: #f8f9fa;
+    color: #6c757d;
+}
+
+.note-history-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.note-history-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.note-history-header h2 {
+    margin: 0;
+    color: #333;
+    font-size: 18px;
+}
+
+.note-history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 360px;
+    overflow-y: auto;
+}
+
+.note-history-item {
+    padding: 12px;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    background: #f8f9fa;
+}
+
+.note-history-item.editing {
+    background: #fff;
+    border-color: #b8c0ff;
+}
+
+.note-history-title-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.note-history-summary {
+    color: #222;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.4;
+    word-break: break-word;
+}
+
+.note-history-time {
+    color: #6c757d;
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+.note-history-actions {
+    display: flex;
+    gap: 8px;
+    flex: 0 0 auto;
+}
+
+.btn-small {
+    min-height: 32px;
+    padding: 5px 10px;
+    font-size: 13px;
+}
+
+.note-history-content {
+    color: #333;
+    font-size: 14px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.note-history-edit {
+    width: 100%;
+    min-height: 150px;
+    resize: vertical;
+    padding: 10px;
+    border: 1px solid #d8dce2;
+    border-radius: 6px;
+    font-size: 14px;
+    line-height: 1.5;
+    font-family: inherit;
+}
+
+.todo-create {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.todo-create input {
+    min-height: 44px;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+.todo-create input[type="text"] {
+    width: 260px;
+}
+
+.todo-summary {
+    color: #6c757d;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.todo-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.todo-item {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 14px;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    background: #fff;
+}
+
+.todo-item.completed {
+    background: #f8f9fa;
+}
+
+.todo-check {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.todo-check input {
+    width: 22px;
+    height: 22px;
+    accent-color: #667eea;
+    cursor: pointer;
+}
+
+.todo-main {
+    min-width: 0;
+}
+
+.todo-title {
+    color: #333;
+    font-size: 16px;
+    line-height: 1.4;
+    word-break: break-word;
+}
+
+.todo-item.completed .todo-title {
+    color: #6c757d;
+    text-decoration: line-through;
+}
+
+.todo-time {
+    color: #6c757d;
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+.todo-edit-input {
+    width: 100%;
+    min-height: 42px;
+    padding: 8px 10px;
+    border: 1px solid #b8c0ff;
+    border-radius: 6px;
+    font-size: 16px;
+}
+
+.todo-edit-fields {
+    display: block;
+}
+
+.todo-edit-input:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.16);
+}
+
+.todo-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.todo-completed-entry {
+    width: 100%;
+    min-height: 54px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px;
+    border: 1px solid #d8dce2;
+    border-radius: 6px;
+    background: #fff;
+    color: #333;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+.todo-completed-entry:hover {
+    border-color: #667eea;
+    background: #f8f9ff;
+}
+
+.todo-completed-entry strong {
+    color: #667eea;
+    font-size: 14px;
+}
+
+.todo-completed-modal-content {
+    max-width: 760px;
+}
+
+.todo-completed-modal-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    max-height: 62vh;
+    overflow-y: auto;
+    margin-bottom: 18px;
+}
+
+.todo-completed-date-group h3 {
+    color: #333;
+    font-size: 16px;
+    margin-bottom: 10px;
+}
+
+.todo-completed-date-group .todo-item {
+    grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.challenge-create-form {
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) auto;
+    gap: 12px;
+    align-items: start;
+}
+
+.challenge-create-form input,
+.challenge-create-form textarea {
+    width: 100%;
+    min-height: 44px;
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font: inherit;
+}
+
+.challenge-create-form textarea {
+    grid-column: 1 / -1;
+    resize: vertical;
+}
+
+.challenge-days-label {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #495057;
+    white-space: nowrap;
+}
+
+.challenge-days-label input {
+    width: 76px;
+}
+
+.challenge-create-form .btn {
+    grid-column: 1 / -1;
+    justify-self: start;
+}
+
+.challenge-day-list {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.challenge-card {
+    border: 1px solid #e1e5ea;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.challenge-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px;
+    background: #f8f9fb;
+}
+
+.challenge-card-header h3 {
+    color: #333;
+    font-size: 16px;
+}
+
+.challenge-card-header p {
+    margin-top: 4px;
+    color: #6c757d;
+    font-size: 13px;
+}
+
+.challenge-items-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.challenge-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 48px;
+    padding: 10px 16px;
+    border-top: 1px solid #edf0f3;
+    color: #333;
+}
+
+.challenge-item input {
+    width: 20px;
+    height: 20px;
+    accent-color: #667eea;
+}
+
+.challenge-item.completed {
+    color: #6c757d;
+    background: #fafbfc;
+}
+
+.challenge-item.completed span:last-child {
+    text-decoration: line-through;
+}
+
+.challenge-card.compact .challenge-card-header {
+    padding: 12px 14px;
+}
+
+.challenge-card.compact .challenge-item {
+    justify-content: flex-start;
+    font-size: 14px;
+}
+
+.challenge-card.compact .challenge-item span:first-child {
+    width: 48px;
+    color: #6c757d;
+    font-size: 12px;
+}
+
+.challenge-stats-items {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.challenge-stats-items p {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.challenge-stats-items span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* 进度查看 */
@@ -676,6 +1214,134 @@ body {
 
     .section {
         margin-bottom: 20px;
+    }
+
+    .note-tag-create {
+        width: 100%;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    .note-tag-create input {
+        flex: 1 1 180px;
+        max-width: 260px;
+    }
+
+    .notes-layout {
+        grid-template-columns: 1fr;
+        justify-items: center;
+        gap: 16px;
+    }
+
+    .note-tags-panel,
+    .note-editor-panel {
+        width: 100%;
+        max-width: 560px;
+    }
+
+    .note-tags-panel .section {
+        text-align: center;
+    }
+
+    .note-tag-list {
+        justify-content: center;
+    }
+
+    .note-editor-header {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+    }
+
+    .note-editor-actions {
+        justify-content: center;
+    }
+
+    .note-content {
+        min-height: 360px;
+        text-align: left;
+    }
+
+    .note-history-panel {
+        width: 100%;
+        text-align: left;
+    }
+
+    .note-history-header {
+        justify-content: center;
+    }
+
+    .note-history-title-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .note-history-actions {
+        justify-content: center;
+    }
+
+    .todo-create {
+        width: 100%;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .todo-create input {
+        flex: 1 1 220px;
+        width: auto;
+        max-width: 420px;
+    }
+
+    .todo-create input[type="datetime-local"] {
+        max-width: 260px;
+    }
+
+    .todo-edit-fields {
+        grid-template-columns: 1fr;
+    }
+
+    .todo-item {
+        grid-template-columns: 36px minmax(0, 1fr);
+        align-items: flex-start;
+    }
+
+    .todo-actions {
+        grid-column: 1 / -1;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    .todo-completed-date-group .todo-item {
+        grid-template-columns: 1fr;
+    }
+
+    .challenge-create-form {
+        grid-template-columns: 1fr;
+    }
+
+    .challenge-create-form textarea,
+    .challenge-create-form .btn {
+        grid-column: auto;
+    }
+
+    .challenge-card-header {
+        align-items: flex-start;
+    }
+
+    .management-item {
+        flex-direction: column;
+        align-items: stretch;
+        text-align: center;
+    }
+
+    .management-actions {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .management-actions .btn {
+        flex: 1;
+        max-width: 150px;
     }
 
     .section h2,

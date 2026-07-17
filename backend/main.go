@@ -70,7 +70,20 @@ func main() {
 	http.HandleFunc("/api/weight", server.handleWeightRecords)
 	http.HandleFunc("/api/weight/latest", server.handleWeightLatest)
 
-	// 数据库同步（需要通过 SYNC_TOKEN 显式启用）
+	// 笔记 API 路由
+	http.HandleFunc("/api/note-tags", server.handleNoteTags)
+	http.HandleFunc("/api/note-tags/", server.handleNoteTagActions)
+	http.HandleFunc("/api/notes", server.handleNotes)
+	http.HandleFunc("/api/notes/new", server.handleNewNote)
+	http.HandleFunc("/api/notes/history", server.handleNoteHistory)
+	http.HandleFunc("/api/todos", server.handleTodos)
+	http.HandleFunc("/api/todos/", server.handleTodoItem)
+	http.HandleFunc("/api/challenges", server.handleChallenges)
+	http.HandleFunc("/api/challenges/", server.handleChallenge)
+	http.HandleFunc("/api/challenge-daily-items/", server.handleChallengeDailyItem)
+	http.HandleFunc("/api/stats/challenges", server.handleChallengeStats)
+
+	// 数据库同步
 	http.HandleFunc("/api/sync/database", server.handleDatabaseSync)
 
 	// 静态文件服务（前端）
@@ -102,7 +115,14 @@ func main() {
 	fmt.Println("  GET    /api/weight - 获取体重记录")
 	fmt.Println("  POST   /api/weight - 添加体重记录")
 	fmt.Println("  GET    /api/weight/latest - 获取最新体重")
-	fmt.Println("  GET    /api/sync/database - 下载 SQLite 快照（需要 SYNC_TOKEN）")
+	fmt.Println("  GET    /api/note-tags - 获取笔记标签")
+	fmt.Println("  POST   /api/note-tags - 添加笔记标签")
+	fmt.Println("  GET    /api/notes?tagId=1 - 获取标签笔记")
+	fmt.Println("  PUT    /api/notes - 保存标签笔记")
+	fmt.Println("  GET    /api/notes/history?tagId=1 - 获取标签历史笔记")
+	fmt.Println("  GET    /api/todos - 获取待办事项")
+	fmt.Println("  POST   /api/todos - 添加待办事项")
+	fmt.Println("  GET    /api/sync/database - 下载 SQLite 快照")
 
 	if err := http.ListenAndServe(listenAddr, nil); err != nil {
 		log.Fatal(err)

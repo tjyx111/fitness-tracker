@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/subtle"
 	"fmt"
 	"net/http"
 	"os"
@@ -10,26 +9,11 @@ import (
 )
 
 // handleDatabaseSync returns a consistent SQLite snapshot for pulling cloud
-// data to another machine. It is disabled unless SYNC_TOKEN is configured.
+// data to another machine.
 func (s *Server) handleDatabaseSync(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", http.MethodGet)
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	token := os.Getenv("SYNC_TOKEN")
-	if token == "" {
-		http.Error(w, "database sync is disabled", http.StatusServiceUnavailable)
-		return
-	}
-
-	provided := r.Header.Get("Authorization")
-	const prefix = "Bearer "
-	if len(provided) < len(prefix) || provided[:len(prefix)] != prefix ||
-		subtle.ConstantTimeCompare([]byte(provided[len(prefix):]), []byte(token)) != 1 {
-		w.Header().Set("WWW-Authenticate", "Bearer")
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 
