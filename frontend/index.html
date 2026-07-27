@@ -424,7 +424,7 @@
 
     <!-- 添加动作组弹窗 -->
     <div id="group-modal" class="modal">
-        <div class="modal-content">
+        <div class="modal-content group-modal-content">
             <h2 id="group-modal-title">添加动作组</h2>
             <form id="group-form">
                 <div class="form-group">
@@ -432,7 +432,8 @@
                     <input type="text" id="group-form-name" required placeholder="如：胸肌训练" />
                 </div>
                 <div class="form-group">
-                    <label>选择动作</label>
+                    <label>选择动作与训练顺序</label>
+                    <p class="form-help">勾选后的动作会排在上方，可用箭头调整训练时的先后顺序。</p>
                     <div id="exercise-checkboxes" class="checkbox-list">
                         <!-- 动态加载动作复选框 -->
                     </div>

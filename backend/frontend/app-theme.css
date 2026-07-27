@@ -1850,6 +1850,109 @@ textarea {
     color: var(--app-text);
 }
 
+.group-modal-content {
+    max-width: 620px;
+}
+
+.form-help {
+    margin: -2px 0 9px;
+    color: var(--app-text-soft);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.group-exercise-row {
+    min-height: 56px;
+    padding: 5px 6px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    background: var(--app-surface);
+}
+
+.group-exercise-row.selected {
+    border-color: rgba(15, 118, 110, 0.25);
+    background: var(--app-primary-container);
+}
+
+.group-exercise-select {
+    min-width: 0;
+    margin: 0 !important;
+    padding: 5px !important;
+    display: grid !important;
+    grid-template-columns: 23px 25px minmax(0, 1fr);
+    gap: 9px !important;
+}
+
+.group-exercise-order-index {
+    display: grid;
+    place-items: center;
+    width: 25px;
+    height: 25px;
+    border-radius: 999px;
+    background: var(--app-surface-3);
+    color: var(--app-text-soft);
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.group-exercise-row.selected .group-exercise-order-index {
+    background: var(--app-primary);
+    color: white;
+}
+
+.group-exercise-copy {
+    min-width: 0;
+}
+
+.group-exercise-copy strong,
+.group-exercise-copy small {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.group-exercise-copy strong {
+    color: var(--app-text);
+    font-size: 14px;
+}
+
+.group-exercise-copy small {
+    margin-top: 3px;
+    color: var(--app-text-soft);
+    font-size: 11px;
+}
+
+.group-exercise-order-actions {
+    display: flex;
+    gap: 5px;
+}
+
+.group-exercise-order-actions[hidden] {
+    display: none;
+}
+
+.group-exercise-move {
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    border: 1px solid rgba(15, 118, 110, 0.2);
+    border-radius: 11px;
+    background: var(--app-surface);
+    color: var(--app-primary);
+    font-size: 20px;
+    font-weight: 800;
+}
+
+.group-exercise-move:disabled {
+    cursor: default;
+    opacity: 0.3;
+}
+
 .form-actions {
     margin-top: 20px;
     justify-content: flex-end;

@@ -89,6 +89,52 @@ func TestDeleteExerciseWithData(t *testing.T) {
 	}
 }
 
+func TestExerciseGroupOrderRoundTrip(t *testing.T) {
+	h, err := NewSQLiteHandler(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewSQLiteHandler: %v", err)
+	}
+	defer h.Close()
+
+	if err := h.SaveExercises([]Exercise{
+		{ID: 1, Name: "深蹲", MuscleGroup: "腿部", Unit: "kg"},
+		{ID: 2, Name: "硬拉", MuscleGroup: "背部", Unit: "kg"},
+		{ID: 3, Name: "腿举", MuscleGroup: "腿部", Unit: "kg"},
+	}); err != nil {
+		t.Fatalf("SaveExercises: %v", err)
+	}
+
+	assertOrder := func(want []int) {
+		t.Helper()
+		groups, err := h.LoadExerciseGroups()
+		if err != nil {
+			t.Fatalf("LoadExerciseGroups: %v", err)
+		}
+		if len(groups) != 1 || len(groups[0].ExerciseIDs) != len(want) {
+			t.Fatalf("groups=%v, want one group with order %v", groups, want)
+		}
+		for i, id := range want {
+			if groups[0].ExerciseIDs[i] != id {
+				t.Fatalf("exercise order=%v, want %v", groups[0].ExerciseIDs, want)
+			}
+		}
+	}
+
+	if err := h.SaveExerciseGroups([]ExerciseGroup{
+		{ID: 1, Name: "腿部训练", ExerciseIDs: []int{3, 1, 2}},
+	}); err != nil {
+		t.Fatalf("SaveExerciseGroups initial: %v", err)
+	}
+	assertOrder([]int{3, 1, 2})
+
+	if err := h.SaveExerciseGroups([]ExerciseGroup{
+		{ID: 1, Name: "腿部训练", ExerciseIDs: []int{2, 3, 1}},
+	}); err != nil {
+		t.Fatalf("SaveExerciseGroups reordered: %v", err)
+	}
+	assertOrder([]int{2, 3, 1})
+}
+
 func TestNotes(t *testing.T) {
 	h, err := NewSQLiteHandler(t.TempDir())
 	if err != nil {

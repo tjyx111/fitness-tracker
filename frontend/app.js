@@ -443,8 +443,7 @@ async function syncExerciseGroupMembership(exerciseId, selectedGroupIds) {
 async function saveGroup(e) {
     e.preventDefault();
     const name = document.getElementById('group-form-name').value.trim();
-    const checkboxes = document.querySelectorAll('#exercise-checkboxes input:checked');
-    const exerciseIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+    const exerciseIds = getOrderedGroupExerciseIds();
     const isEditing = state.editingGroupId !== null;
     const payload = { name, exerciseIds };
 
@@ -2118,13 +2117,110 @@ async function deleteGroup(id) {
 
 function loadExerciseCheckboxes(selectedIds = []) {
     const container = document.getElementById('exercise-checkboxes');
-    const selected = new Set(selectedIds.map(id => parseInt(id)));
-    container.innerHTML = state.exercises.filter(ex => ex.id > 0).map(ex => `
-        <label>
-            <input type="checkbox" name="exercises" value="${ex.id}" ${selected.has(ex.id) ? 'checked' : ''}>
-            ${ex.name} (${ex.muscleGroup})
-        </label>
+    const validExercises = state.exercises.filter(ex => ex.id > 0);
+    const exerciseById = new Map(validExercises.map(ex => [ex.id, ex]));
+    const orderedExercises = [];
+    const selected = new Set();
+
+    selectedIds.forEach(value => {
+        const id = parseInt(value);
+        const exercise = exerciseById.get(id);
+        if (!exercise || selected.has(id)) return;
+        selected.add(id);
+        orderedExercises.push(exercise);
+    });
+    validExercises.forEach(exercise => {
+        if (!selected.has(exercise.id)) {
+            orderedExercises.push(exercise);
+        }
+    });
+
+    if (orderedExercises.length === 0) {
+        container.innerHTML = '<p class="empty-hint">暂无可选动作</p>';
+        return;
+    }
+
+    container.innerHTML = orderedExercises.map(exercise => `
+        <div class="group-exercise-row" data-exercise-id="${exercise.id}">
+            <label class="group-exercise-select">
+                <input type="checkbox" name="exercises" value="${exercise.id}" ${selected.has(exercise.id) ? 'checked' : ''}>
+                <span class="group-exercise-order-index" aria-hidden="true"></span>
+                <span class="group-exercise-copy">
+                    <strong>${escapeHtml(exercise.name)}</strong>
+                    <small>${escapeHtml(exercise.muscleGroup)}</small>
+                </span>
+            </label>
+            <span class="group-exercise-order-actions">
+                <button type="button" class="group-exercise-move group-exercise-move-up" aria-label="上移动作 ${escapeHtml(exercise.name)}">↑</button>
+                <button type="button" class="group-exercise-move group-exercise-move-down" aria-label="下移动作 ${escapeHtml(exercise.name)}">↓</button>
+            </span>
+        </div>
     `).join('');
+
+    container.querySelectorAll('input[name="exercises"]').forEach(checkbox => {
+        checkbox.addEventListener('change', () => {
+            const row = checkbox.closest('.group-exercise-row');
+            if (checkbox.checked) {
+                const firstUnchecked = Array.from(container.querySelectorAll('.group-exercise-row'))
+                    .find(candidate => candidate !== row && !candidate.querySelector('input').checked);
+                if (firstUnchecked) {
+                    container.insertBefore(row, firstUnchecked);
+                } else {
+                    container.appendChild(row);
+                }
+            } else {
+                container.appendChild(row);
+            }
+            refreshGroupExerciseOrder();
+        });
+    });
+
+    container.querySelectorAll('.group-exercise-move-up').forEach(button => {
+        button.addEventListener('click', () => moveGroupExercise(button.closest('.group-exercise-row'), -1));
+    });
+    container.querySelectorAll('.group-exercise-move-down').forEach(button => {
+        button.addEventListener('click', () => moveGroupExercise(button.closest('.group-exercise-row'), 1));
+    });
+    refreshGroupExerciseOrder();
+}
+
+function moveGroupExercise(row, direction) {
+    const container = document.getElementById('exercise-checkboxes');
+    const selectedRows = Array.from(container.querySelectorAll('.group-exercise-row'))
+        .filter(candidate => candidate.querySelector('input').checked);
+    const currentIndex = selectedRows.indexOf(row);
+    const target = selectedRows[currentIndex + direction];
+    if (currentIndex < 0 || !target) return;
+
+    if (direction < 0) {
+        container.insertBefore(row, target);
+    } else {
+        container.insertBefore(target, row);
+    }
+    refreshGroupExerciseOrder();
+}
+
+function refreshGroupExerciseOrder() {
+    const container = document.getElementById('exercise-checkboxes');
+    const rows = Array.from(container.querySelectorAll('.group-exercise-row'));
+    const selectedRows = rows.filter(row => row.querySelector('input').checked);
+    const selectedIndexes = new Map(selectedRows.map((row, index) => [row, index]));
+
+    rows.forEach(row => {
+        const index = selectedIndexes.get(row);
+        const isSelected = index !== undefined;
+        row.classList.toggle('selected', isSelected);
+        row.querySelector('.group-exercise-order-index').textContent = isSelected ? String(index + 1) : '–';
+        row.querySelector('.group-exercise-order-actions').hidden = !isSelected;
+        row.querySelector('.group-exercise-move-up').disabled = !isSelected || index === 0;
+        row.querySelector('.group-exercise-move-down').disabled = !isSelected || index === selectedRows.length - 1;
+    });
+}
+
+function getOrderedGroupExerciseIds() {
+    return Array.from(document.querySelectorAll('#exercise-checkboxes input:checked'))
+        .map(checkbox => parseInt(checkbox.value))
+        .filter(id => id > 0);
 }
 
 function loadExerciseGroupCheckboxes(selectedIds = []) {

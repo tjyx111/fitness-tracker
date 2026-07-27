@@ -89,6 +89,20 @@ function assert(condition, message) {
                 await page.locator('#back-to-groups').click();
             }
 
+            if (pageName === 'exercises' && await page.locator('#groups-table-container button[onclick^="editGroup"]').count() > 0) {
+                await page.locator('#groups-table-container button[onclick^="editGroup"]').first().click();
+                const selectedRows = page.locator('#exercise-checkboxes .group-exercise-row.selected');
+                if (await selectedRows.count() >= 2) {
+                    const firstID = await selectedRows.nth(0).getAttribute('data-exercise-id');
+                    const secondID = await selectedRows.nth(1).getAttribute('data-exercise-id');
+                    await selectedRows.nth(0).locator('.group-exercise-move-down').click();
+                    assert(await selectedRows.nth(0).getAttribute('data-exercise-id') === secondID, 'group exercise did not move down');
+                    assert(await selectedRows.nth(1).getAttribute('data-exercise-id') === firstID, 'group exercise order was not swapped');
+                    await selectedRows.nth(1).locator('.group-exercise-move-up').click();
+                }
+                await page.locator('#group-modal .btn-secondary').first().click();
+            }
+
             if (pageName === 'challenges' && await page.locator('.challenge-history-card').count() > 0) {
                 await page.locator('.challenge-history-toggle').first().click();
                 await page.locator('.challenge-history-day').first().waitFor();
