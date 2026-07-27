@@ -27,14 +27,20 @@ let state = {
     editingTodoId: null,
     todoSaving: false,
     challengeDays: [],
+    challengeHistory: [],
+    challengeHistoryDetails: {},
+    expandedChallengeId: null,
     challengeSaving: false,
     challengeRefreshTimer: null,
+    reports: [],
+    selectedReportName: null,
     statsDashboardTemplate: ''
 };
 
 // ========== 初始化 ==========
 
 document.addEventListener('DOMContentLoaded', () => {
+    initAppEnvironment();
     initNavigation();
     initDateInputs();
     loadGroups();
@@ -46,17 +52,53 @@ document.addEventListener('DOMContentLoaded', () => {
     scheduleChallengeDailyRefresh();
 });
 
+function initAppEnvironment() {
+    const connectivityBanner = document.getElementById('connectivity-banner');
+    const updateConnectivity = () => {
+        const offline = !navigator.onLine;
+        document.body.classList.toggle('is-offline', offline);
+        if (connectivityBanner) {
+            connectivityBanner.hidden = !offline;
+        }
+    };
+    window.addEventListener('online', updateConnectivity);
+    window.addEventListener('offline', updateConnectivity);
+    updateConnectivity();
+
+    const reminderButton = document.getElementById('android-reminder-btn');
+    const isAndroidApp = Boolean(window.FitnessAndroid
+        && typeof window.FitnessAndroid.openReminderSettings === 'function');
+    if (reminderButton && isAndroidApp) {
+        reminderButton.hidden = false;
+        document.body.classList.add('is-android-app');
+        reminderButton.addEventListener('click', () => {
+            window.FitnessAndroid.openReminderSettings();
+        });
+    }
+
+    if (isAndroidApp && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/service-worker.js').catch(error => {
+            console.warn('Offline cache registration failed:', error);
+        });
+    }
+}
+
 // 导航切换
 function initNavigation() {
     const navBtns = document.querySelectorAll('.nav-btn');
     navBtns.forEach(btn => {
         btn.addEventListener('click', () => {
-            navBtns.forEach(b => b.classList.remove('active'));
+            navBtns.forEach(b => {
+                b.classList.remove('active');
+                b.setAttribute('aria-selected', 'false');
+            });
             btn.classList.add('active');
+            btn.setAttribute('aria-selected', 'true');
 
             const page = btn.dataset.page;
             document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
             document.getElementById(`page-${page}`).classList.add('active');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
 
             if (page === 'exercises') {
                 loadExercisesTable();
@@ -69,6 +111,8 @@ function initNavigation() {
                 loadChallengesPage();
             } else if (page === 'statistics') {
                 loadStatistics();
+            } else if (page === 'reports') {
+                loadReportsPage();
             } else if (page === 'training') {
                 loadTrainingDateSessions(document.getElementById('training-date').value);
             }
@@ -137,6 +181,7 @@ function initEventListeners() {
     document.getElementById('show-completed-todos-btn')?.addEventListener('click', openCompletedTodosModal);
     document.getElementById('challenge-create-form')?.addEventListener('submit', createChallenge);
     document.getElementById('challenge-date')?.addEventListener('change', loadChallengesPage);
+    document.getElementById('refresh-reports-btn')?.addEventListener('click', loadReportsPage);
 
     // 统计筛选切换
     document.getElementById('stats-type')?.addEventListener('change', onStatsTypeChange);
@@ -166,6 +211,112 @@ async function loadExercises() {
     } catch (err) {
         console.error('Failed to load exercises:', err);
     }
+}
+
+async function loadReportsPage() {
+    const list = document.getElementById('report-list');
+    const count = document.getElementById('report-count');
+    if (!list || !count) return;
+
+    list.innerHTML = '<p class="empty-hint">正在加载报告列表…</p>';
+    try {
+        const response = await fetch(`${API_BASE}/reports`, { cache: 'no-cache' });
+        if (!response.ok) throw new Error(await response.text());
+        state.reports = await response.json();
+        renderReports();
+
+        const selectedStillExists = state.reports.some(report => report.name === state.selectedReportName);
+        if (!selectedStillExists) {
+            state.selectedReportName = null;
+        }
+        if (!state.selectedReportName && state.reports.length > 0) {
+            openReport(state.reports[0].name);
+        } else if (state.selectedReportName) {
+            openReport(state.selectedReportName);
+        } else {
+            clearReportViewer('当前没有可查看的 HTML 报告');
+        }
+    } catch (error) {
+        console.error('Failed to load reports:', error);
+        state.reports = [];
+        list.innerHTML = '<p class="empty-hint error">报告列表加载失败，请检查网络后重试</p>';
+        count.textContent = '0 份';
+        clearReportViewer('报告列表加载失败');
+    }
+}
+
+function renderReports() {
+    const list = document.getElementById('report-list');
+    const count = document.getElementById('report-count');
+    if (!list || !count) return;
+
+    count.textContent = `${state.reports.length} 份`;
+    if (state.reports.length === 0) {
+        list.innerHTML = '<p class="empty-hint">暂无报告，可通过上传接口添加 report.htm</p>';
+        return;
+    }
+
+    list.innerHTML = state.reports.map(report => `
+        <button
+            type="button"
+            class="report-list-item ${report.name === state.selectedReportName ? 'active' : ''}"
+            data-report-name="${escapeHtml(report.name)}"
+            role="listitem">
+            <span class="report-list-icon" aria-hidden="true">HTML</span>
+            <span class="report-list-copy">
+                <strong>${escapeHtml(report.name)}</strong>
+                <small>${formatReportTime(report.updatedAt)} · ${formatReportSize(report.size)}</small>
+            </span>
+            <span class="report-list-chevron" aria-hidden="true">›</span>
+        </button>
+    `).join('');
+
+    list.querySelectorAll('.report-list-item').forEach(button => {
+        button.addEventListener('click', () => openReport(button.dataset.reportName));
+    });
+}
+
+function openReport(name) {
+    const report = state.reports.find(item => item.name === name);
+    if (!report) return;
+
+    state.selectedReportName = name;
+    document.getElementById('report-viewer-title').textContent = name;
+    document.getElementById('report-viewer-empty').hidden = true;
+    const frame = document.getElementById('report-frame');
+    frame.hidden = false;
+    frame.src = report.url;
+    renderReports();
+}
+
+function clearReportViewer(message) {
+    state.selectedReportName = null;
+    const frame = document.getElementById('report-frame');
+    frame.hidden = true;
+    frame.removeAttribute('src');
+    document.getElementById('report-viewer-title').textContent = '尚未选择报告';
+    const empty = document.getElementById('report-viewer-empty');
+    empty.textContent = message;
+    empty.hidden = false;
+}
+
+function formatReportTime(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '时间未知';
+    return new Intl.DateTimeFormat('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+    }).format(date);
+}
+
+function formatReportSize(value) {
+    const bytes = Number(value) || 0;
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
 }
 
 async function loadLastRecord(groupId) {
@@ -750,6 +901,13 @@ function formatNoteTime(value) {
 // ========== 每日挑战 ==========
 
 async function loadChallengesPage() {
+    await Promise.all([
+        loadChallengeDay(),
+        loadChallengeHistory()
+    ]);
+}
+
+async function loadChallengeDay() {
     const date = document.getElementById('challenge-date')?.value;
     if (!date) return;
     try {
@@ -762,6 +920,123 @@ async function loadChallengesPage() {
         state.challengeDays = [];
         renderChallengeDays();
     }
+}
+
+async function loadChallengeHistory() {
+    const container = document.getElementById('challenge-history-list');
+    try {
+        const res = await fetch(`${API_BASE}/challenges/history`);
+        if (!res.ok) throw new Error(await res.text());
+        state.challengeHistory = await res.json();
+    } catch (err) {
+        console.error('Failed to load challenge history:', err);
+        state.challengeHistory = [];
+        if (container) {
+            container.innerHTML = '<p class="empty-hint">历史挑战加载失败</p>';
+        }
+        return;
+    }
+    renderChallengeHistory();
+}
+
+function renderChallengeHistory() {
+    const container = document.getElementById('challenge-history-list');
+    const count = document.getElementById('challenge-history-count');
+    if (!container) return;
+
+    const history = state.challengeHistory || [];
+    if (count) count.textContent = `${history.length} 个周期`;
+    if (history.length === 0) {
+        container.innerHTML = '<p class="empty-hint">暂无历史挑战</p>';
+        return;
+    }
+
+    container.innerHTML = history.map(challenge => {
+        const expanded = state.expandedChallengeId === challenge.id;
+        const percent = Math.round(challenge.completionPercent || 0);
+        const detail = state.challengeHistoryDetails[challenge.id];
+        return `
+            <article class="challenge-history-card ${expanded ? 'expanded' : ''}">
+                <button type="button" class="challenge-history-toggle" onclick="toggleChallengeHistory(${challenge.id})" aria-expanded="${expanded}">
+                    <div class="challenge-history-heading">
+                        <div>
+                            <span class="challenge-status-badge ${escapeHtml(challenge.status)}">${formatChallengeStatus(challenge.status)}</span>
+                            <h3>${escapeHtml(challenge.name)}</h3>
+                            <p>${challenge.startDate} 至 ${challenge.endDate} · ${challenge.totalDays} 天 · ${challenge.itemCount} 项</p>
+                        </div>
+                        <span class="challenge-history-chevron" aria-hidden="true">⌄</span>
+                    </div>
+                    <div class="challenge-history-progress-row">
+                        <div class="challenge-progress-track"><span style="width: ${Math.max(0, Math.min(100, percent))}%"></span></div>
+                        <strong>${challenge.completedItems} / ${challenge.totalItems} · ${percent}%</strong>
+                    </div>
+                </button>
+                ${expanded ? `<div class="challenge-history-detail">${renderChallengeHistoryDetail(detail)}</div>` : ''}
+            </article>
+        `;
+    }).join('');
+}
+
+function renderChallengeHistoryDetail(detail) {
+    if (!detail) {
+        return '<p class="challenge-history-loading">正在加载周期明细…</p>';
+    }
+    if (detail.error) {
+        return '<p class="challenge-history-loading error">周期明细加载失败，点击卡片重试</p>';
+    }
+    if (!detail.days || detail.days.length === 0) {
+        return '<p class="challenge-history-loading">该周期没有每日记录</p>';
+    }
+
+    return detail.days.map((day, index) => `
+        <details class="challenge-history-day" ${index === detail.days.length - 1 ? 'open' : ''}>
+            <summary>
+                <span>${day.date}</span>
+                <strong>${day.completedItems} / ${day.totalItems} · ${Math.round(day.completionPercent || 0)}%</strong>
+            </summary>
+            <div class="challenge-history-items">
+                ${day.items.map(item => `
+                    <div class="challenge-history-item ${item.completed ? 'completed' : ''}">
+                        <span class="challenge-history-check" aria-hidden="true">${item.completed ? '✓' : '○'}</span>
+                        <span>${escapeHtml(item.title)}</span>
+                    </div>
+                `).join('')}
+            </div>
+        </details>
+    `).join('');
+}
+
+async function toggleChallengeHistory(id) {
+    if (state.expandedChallengeId === id) {
+        state.expandedChallengeId = null;
+        renderChallengeHistory();
+        return;
+    }
+
+    state.expandedChallengeId = id;
+    if (state.challengeHistoryDetails[id]?.error) {
+        delete state.challengeHistoryDetails[id];
+    }
+    renderChallengeHistory();
+    if (state.challengeHistoryDetails[id]) return;
+
+    try {
+        const res = await fetch(`${API_BASE}/challenges/${id}`);
+        if (!res.ok) throw new Error(await res.text());
+        state.challengeHistoryDetails[id] = await res.json();
+    } catch (err) {
+        console.error('Failed to load challenge detail:', err);
+        state.challengeHistoryDetails[id] = { error: true };
+    }
+    if (state.expandedChallengeId === id) {
+        renderChallengeHistory();
+    }
+}
+
+function formatChallengeStatus(status) {
+    if (status === 'completed') return '已完成';
+    if (status === 'terminated') return '已终止';
+    return '进行中';
 }
 
 async function createChallenge(event) {
@@ -1558,6 +1833,7 @@ async function openTrainingDetailForGroup(group, options = {}) {
                             </div>
                         `).join('')}
                     </div>
+                    <button type="button" class="add-set-btn add-set-btn-bottom" onclick="addSet(this)">+ 在末尾添加一组</button>
                 </div>
             </div>
         `;
@@ -1614,6 +1890,21 @@ function addSet(btn) {
 
     setsList.appendChild(setDiv);
     renumberSets(setsList);
+    if (btn.classList.contains('add-set-btn-bottom')) {
+        requestAnimationFrame(() => {
+            const stickyActions = document.querySelector('#page-training-detail .actions');
+            const visibleBottom = stickyActions
+                ? stickyActions.getBoundingClientRect().top - 10
+                : window.innerHeight - 10;
+            const buttonBottom = btn.getBoundingClientRect().bottom;
+            if (buttonBottom > visibleBottom) {
+                window.scrollBy({
+                    top: buttonBottom - visibleBottom,
+                    behavior: 'instant'
+                });
+            }
+        });
+    }
 }
 
 // 删除组

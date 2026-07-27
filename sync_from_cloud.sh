@@ -2,15 +2,22 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
-CLOUD_URL="${CLOUD_URL:-http://183.36.16.116:19797}"
+CLOUD_URL="${CLOUD_URL:-https://111.230.63.109:19797}"
 LOCAL_DB="${LOCAL_DB:-$ROOT_DIR/backend/data/fitness.db}"
 GIT_COMMIT="${GIT_COMMIT:-1}"
 GIT_PUSH="${GIT_PUSH:-1}"
 GIT_REMOTE="${GIT_REMOTE:-origin}"
 GIT_REF="${GIT_REF:-HEAD}"
+FITNESS_TLS_DIR="${FITNESS_TLS_DIR:-/root/.config/fitness-tracker/tls}"
+CLOUD_CA_CERT_FILE="${CLOUD_CA_CERT_FILE:-$FITNESS_TLS_DIR/ca.crt}"
 
 if ! command -v curl >/dev/null 2>&1; then
   echo "curl is required"
+  exit 1
+fi
+
+if [ ! -r "$CLOUD_CA_CERT_FILE" ]; then
+  echo "Required TLS CA certificate is not readable: $CLOUD_CA_CERT_FILE" >&2
   exit 1
 fi
 if ! command -v sqlite3 >/dev/null 2>&1; then
@@ -34,6 +41,7 @@ trap 'rm -f "$TEMP_DB"' EXIT
 
 curl --fail --silent --show-error \
   --noproxy "${NO_PROXY_HOSTS:-*}" \
+  --cacert "$CLOUD_CA_CERT_FILE" \
   --output "$TEMP_DB" \
   "${CLOUD_URL%/}/api/sync/database"
 

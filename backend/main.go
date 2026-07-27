@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 //go:embed frontend/*
@@ -32,6 +33,13 @@ func main() {
 		log.Fatalf("initialize SQLite storage: %v", err)
 	}
 	defer server.csv.Close()
+	reportDir := os.Getenv("REPORT_DIR")
+	if reportDir == "" {
+		reportDir = filepath.Join(dataDir, "reports")
+	}
+	if err := server.configureReports(reportDir, os.Getenv("REPORT_UPLOAD_TOKEN")); err != nil {
+		log.Fatalf("initialize report storage: %v", err)
+	}
 
 	// 设置路由
 	http.HandleFunc("/api/exercises", server.handleExercises)
@@ -86,12 +94,27 @@ func main() {
 	// 数据库同步
 	http.HandleFunc("/api/sync/database", server.handleDatabaseSync)
 
+	// HTML 分析报告
+	http.HandleFunc("/api/reports", server.handleReports)
+	http.HandleFunc("/api/reports/", server.handleReport)
+
+	// Android APK 下载
+	http.HandleFunc("/downloads/fitness-tracker.apk", apkDownloadHandler(resolveAPKPath()))
+
 	// 静态文件服务（前端）
 	http.Handle("/", http.FileServer(frontendFileSystem()))
 
 	// 启动服务器
 	listenAddr := resolveListenAddr()
-	fmt.Printf("Server starting on %s\n", listenAddr)
+	tlsFiles, err := resolveTLSFiles()
+	if err != nil {
+		log.Fatal(err)
+	}
+	protocol := "http"
+	if tlsFiles.enabled() {
+		protocol = "https"
+	}
+	fmt.Printf("Server starting on %s://%s\n", protocol, listenAddr)
 	fmt.Println("Available endpoints:")
 	fmt.Println("  GET    /api/exercises          - 获取所有动作")
 	fmt.Println("  POST   /api/exercises          - 添加新动作")
@@ -122,9 +145,26 @@ func main() {
 	fmt.Println("  GET    /api/notes/history?tagId=1 - 获取标签历史笔记")
 	fmt.Println("  GET    /api/todos - 获取待办事项")
 	fmt.Println("  POST   /api/todos - 添加待办事项")
+	fmt.Println("  GET    /api/challenges/history - 获取历史挑战")
+	fmt.Println("  GET    /api/challenges/{id} - 获取挑战只读详情")
 	fmt.Println("  GET    /api/sync/database - 下载 SQLite 快照")
+	fmt.Println("  GET    /api/reports - 获取 HTML 分析报告列表")
+	fmt.Println("  GET    /api/reports/{name} - 查看 HTML 分析报告")
+	fmt.Println("  PUT    /api/reports/{name} - 上传 HTML 分析报告（Bearer token）")
+	fmt.Println("  GET    /downloads/fitness-tracker.apk - 下载 Android APK")
 
-	if err := http.ListenAndServe(listenAddr, nil); err != nil {
+	httpServer := &http.Server{
+		Addr:              listenAddr,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+
+	if tlsFiles.enabled() {
+		httpServer.TLSConfig = newTLSConfig()
+		err = httpServer.ListenAndServeTLS(tlsFiles.certFile, tlsFiles.keyFile)
+	} else {
+		err = httpServer.ListenAndServe()
+	}
+	if err != nil {
 		log.Fatal(err)
 	}
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -283,6 +284,61 @@ func TestChallengesGenerateDailyItemsAndStats(t *testing.T) {
 	}
 	if _, err := h.CreateChallenge("新挑战", time.Now().Format("2006-01-02"), 1, []string{"可以创建"}); err != nil {
 		t.Fatalf("CreateChallenge after termination: %v", err)
+	}
+}
+
+func TestCompletedChallengeRemainsAvailableAsReadOnlyHistory(t *testing.T) {
+	h, err := NewSQLiteHandler(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewSQLiteHandler: %v", err)
+	}
+	defer h.Close()
+
+	start := time.Now().AddDate(0, 0, -8).Format("2006-01-02")
+	challenge, err := h.CreateChallenge("历史挑战", start, 7, []string{"早睡", "拉伸"})
+	if err != nil {
+		t.Fatalf("CreateChallenge: %v", err)
+	}
+	if _, err := h.db.Exec(`UPDATE challenge_daily_items SET completed=1,completed_at='done' WHERE id=(SELECT MIN(id) FROM challenge_daily_items)`); err != nil {
+		t.Fatalf("mark historical item complete: %v", err)
+	}
+
+	activeDay, err := h.LoadChallengeDay(start)
+	if err != nil {
+		t.Fatalf("LoadChallengeDay: %v", err)
+	}
+	if len(activeDay) != 0 {
+		t.Fatalf("activeDay=%+v, want completed challenge hidden from editable view", activeDay)
+	}
+
+	history, err := h.LoadChallengeHistory()
+	if err != nil {
+		t.Fatalf("LoadChallengeHistory: %v", err)
+	}
+	if len(history) != 1 || history[0].ID != challenge.ID || history[0].Status != "completed" {
+		t.Fatalf("history=%+v", history)
+	}
+	if history[0].TotalDays != 7 || history[0].ItemCount != 2 || history[0].TotalItems != 14 || history[0].CompletedItems != 1 {
+		t.Fatalf("history summary=%+v", history[0])
+	}
+
+	detail, err := h.LoadChallengeDetail(challenge.ID)
+	if err != nil {
+		t.Fatalf("LoadChallengeDetail: %v", err)
+	}
+	if detail.Challenge.Status != "completed" || len(detail.Days) != 7 || detail.Days[0].Status != "completed" {
+		t.Fatalf("detail=%+v", detail)
+	}
+
+	historyDay, err := h.LoadChallengeHistoryDay(start)
+	if err != nil {
+		t.Fatalf("LoadChallengeHistoryDay: %v", err)
+	}
+	if len(historyDay) != 1 || historyDay[0].ChallengeID != challenge.ID || historyDay[0].TotalItems != 2 {
+		t.Fatalf("historyDay=%+v", historyDay)
+	}
+	if _, err := h.UpdateChallengeDailyItem(historyDay[0].Items[0].ID, true); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("UpdateChallengeDailyItem completed challenge error=%v, want sql.ErrNoRows", err)
 	}
 }
 

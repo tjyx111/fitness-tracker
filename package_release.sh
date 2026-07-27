@@ -54,13 +54,14 @@ mkdir -p "$PACKAGE_DIR"
 cp "$ROOT_DIR/fitness-tracker" "$PACKAGE_DIR/$APP_NAME"
 cp "$ROOT_DIR/start_cloud.sh" "$PACKAGE_DIR/start_cloud.sh"
 cp "$ROOT_DIR/sync_from_cloud.sh" "$PACKAGE_DIR/sync_from_cloud.sh"
+mkdir -p "$PACKAGE_DIR/deploy"
+cp "$ROOT_DIR/deploy/fitness-tracker.service" "$PACKAGE_DIR/deploy/fitness-tracker.service"
 chmod +x "$PACKAGE_DIR/$APP_NAME" "$PACKAGE_DIR/start_cloud.sh" "$PACKAGE_DIR/sync_from_cloud.sh"
 
 echo "Copying data directory..."
-if [ -d "$BACKEND_DIR/data" ]; then
-  cp -R "$BACKEND_DIR/data" "$PACKAGE_DIR/data"
-else
-  mkdir -p "$PACKAGE_DIR/data"
+mkdir -p "$PACKAGE_DIR/data/reports"
+if [ -f "$BACKEND_DIR/data/fitness.db" ]; then
+  cp "$BACKEND_DIR/data/fitness.db" "$PACKAGE_DIR/data/fitness.db"
 fi
 
 cat > "$PACKAGE_DIR/README_DEPLOY.txt" <<EOF
@@ -73,10 +74,27 @@ cat > "$PACKAGE_DIR/README_DEPLOY.txt" <<EOF
   数据目录: ./data
   日志文件: ./fitness-tracker.log
   PID 文件: ./fitness-tracker.pid
-  监听地址: 183.36.16.116:19797
+  监听地址: 0.0.0.0:19797
+  公网地址: https://111.230.63.109:19797
+  TLS 目录: /root/lbs/fitness/tls
+  APK 文件: /root/lbs/fitness/downloads/fitness-tracker.apk
+  APK 下载: https://111.230.63.109:19797/downloads/fitness-tracker.apk
+  云端不校验客户端证书
+  HTML 报告目录: ./data/reports
+
+启用报告上传（token 只保存在仓库外）:
+  mkdir -p /root/.config/fitness-tracker
+  在 /root/.config/fitness-tracker/fitness-tracker.env 中配置:
+  REPORT_UPLOAD_TOKEN=替换为随机长token
+
+在开发仓库中上传报告:
+  REPORT_UPLOAD_TOKEN=同一个token ./scripts/upload_report.sh report.htm
 
 覆盖监听地址:
-  LISTEN_ADDR=0.0.0.0:8080 ./start_cloud.sh start
+  LISTEN_ADDR=0.0.0.0:8080 \
+  TLS_CERT_FILE=/path/to/server.crt \
+  TLS_KEY_FILE=/path/to/server.key \
+  ./start_cloud.sh start
 
 启动云端服务:
   ./start_cloud.sh start

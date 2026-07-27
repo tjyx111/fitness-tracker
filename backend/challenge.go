@@ -45,11 +45,31 @@ type ChallengeDailyItem struct {
 type ChallengeDay struct {
 	ChallengeID       int                  `json:"challengeId"`
 	ChallengeName     string               `json:"challengeName"`
+	Status            string               `json:"status"`
 	Date              string               `json:"date"`
 	Items             []ChallengeDailyItem `json:"items"`
 	CompletedItems    int                  `json:"completedItems"`
 	TotalItems        int                  `json:"totalItems"`
 	CompletionPercent float64              `json:"completionPercent"`
+}
+
+type ChallengeSummary struct {
+	ID                int     `json:"id"`
+	Name              string  `json:"name"`
+	StartDate         string  `json:"startDate"`
+	EndDate           string  `json:"endDate"`
+	Status            string  `json:"status"`
+	TerminatedAt      string  `json:"terminatedAt"`
+	TotalDays         int     `json:"totalDays"`
+	ItemCount         int     `json:"itemCount"`
+	TotalItems        int     `json:"totalItems"`
+	CompletedItems    int     `json:"completedItems"`
+	CompletionPercent float64 `json:"completionPercent"`
+}
+
+type ChallengeDetail struct {
+	Challenge ChallengeSummary `json:"challenge"`
+	Days      []ChallengeDay   `json:"days"`
 }
 
 type ChallengeItemStats struct {
@@ -145,15 +165,27 @@ func (h *SQLiteHandler) CreateChallenge(name, startDate string, days int, titles
 }
 
 func (h *SQLiteHandler) LoadChallengeDay(date string) ([]ChallengeDay, error) {
+	return h.loadChallengeDay(date, true)
+}
+
+func (h *SQLiteHandler) LoadChallengeHistoryDay(date string) ([]ChallengeDay, error) {
+	return h.loadChallengeDay(date, false)
+}
+
+func (h *SQLiteHandler) loadChallengeDay(date string, activeOnly bool) ([]ChallengeDay, error) {
 	if err := h.finishExpiredChallenges(); err != nil {
 		return nil, err
 	}
+	statusFilter := ""
+	if activeOnly {
+		statusFilter = " AND c.status='active'"
+	}
 	rows, err := h.db.Query(`
-SELECT d.id,c.id,c.name,i.id,i.title,d.challenge_date,d.completed,d.completed_at
+SELECT d.id,c.id,c.name,c.status,i.id,i.title,d.challenge_date,d.completed,d.completed_at
 FROM challenge_daily_items d
 JOIN challenge_items i ON i.id=d.challenge_item_id
 JOIN challenges c ON c.id=i.challenge_id
-WHERE d.challenge_date=? AND c.status='active'
+WHERE d.challenge_date=?`+statusFilter+`
 ORDER BY c.id DESC,i.position ASC,d.id ASC`, date)
 	if err != nil {
 		return nil, err
@@ -165,13 +197,14 @@ ORDER BY c.id DESC,i.position ASC,d.id ASC`, date)
 	for rows.Next() {
 		var item ChallengeDailyItem
 		var completed int
-		if err := rows.Scan(&item.ID, &item.ChallengeID, &item.ChallengeName, &item.ChallengeItemID, &item.Title, &item.ChallengeDate, &completed, &item.CompletedAt); err != nil {
+		var status string
+		if err := rows.Scan(&item.ID, &item.ChallengeID, &item.ChallengeName, &status, &item.ChallengeItemID, &item.Title, &item.ChallengeDate, &completed, &item.CompletedAt); err != nil {
 			return nil, err
 		}
 		item.Completed = completed == 1
 		day := byChallenge[item.ChallengeID]
 		if day == nil {
-			day = &ChallengeDay{ChallengeID: item.ChallengeID, ChallengeName: item.ChallengeName, Date: date, Items: []ChallengeDailyItem{}}
+			day = &ChallengeDay{ChallengeID: item.ChallengeID, ChallengeName: item.ChallengeName, Status: status, Date: date, Items: []ChallengeDailyItem{}}
 			byChallenge[item.ChallengeID] = day
 			ordered = append(ordered, item.ChallengeID)
 		}
@@ -192,6 +225,131 @@ ORDER BY c.id DESC,i.position ASC,d.id ASC`, date)
 		result = append(result, *day)
 	}
 	return result, nil
+}
+
+func (h *SQLiteHandler) LoadChallengeHistory() ([]ChallengeSummary, error) {
+	if err := h.finishExpiredChallenges(); err != nil {
+		return nil, err
+	}
+	rows, err := h.db.Query(`
+SELECT c.id,c.name,c.start_date,c.end_date,c.status,c.terminated_at,
+       CAST(julianday(c.end_date)-julianday(c.start_date)+1 AS INTEGER),
+       COUNT(DISTINCT i.id),COUNT(d.id),COALESCE(SUM(d.completed),0)
+FROM challenges c
+LEFT JOIN challenge_items i ON i.challenge_id=c.id
+LEFT JOIN challenge_daily_items d ON d.challenge_item_id=i.id
+WHERE c.status<>'active'
+GROUP BY c.id,c.name,c.start_date,c.end_date,c.status,c.terminated_at
+ORDER BY c.start_date DESC,c.id DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	history := []ChallengeSummary{}
+	for rows.Next() {
+		var summary ChallengeSummary
+		if err := rows.Scan(
+			&summary.ID,
+			&summary.Name,
+			&summary.StartDate,
+			&summary.EndDate,
+			&summary.Status,
+			&summary.TerminatedAt,
+			&summary.TotalDays,
+			&summary.ItemCount,
+			&summary.TotalItems,
+			&summary.CompletedItems,
+		); err != nil {
+			return nil, err
+		}
+		summary.CompletionPercent = challengeCompletionPercent(summary.CompletedItems, summary.TotalItems)
+		history = append(history, summary)
+	}
+	return history, rows.Err()
+}
+
+func (h *SQLiteHandler) LoadChallengeDetail(id int) (ChallengeDetail, error) {
+	if err := h.finishExpiredChallenges(); err != nil {
+		return ChallengeDetail{}, err
+	}
+	var summary ChallengeSummary
+	err := h.db.QueryRow(`
+SELECT c.id,c.name,c.start_date,c.end_date,c.status,c.terminated_at,
+       CAST(julianday(c.end_date)-julianday(c.start_date)+1 AS INTEGER),
+       COUNT(DISTINCT i.id),COUNT(d.id),COALESCE(SUM(d.completed),0)
+FROM challenges c
+LEFT JOIN challenge_items i ON i.challenge_id=c.id
+LEFT JOIN challenge_daily_items d ON d.challenge_item_id=i.id
+WHERE c.id=?
+GROUP BY c.id,c.name,c.start_date,c.end_date,c.status,c.terminated_at`, id).Scan(
+		&summary.ID,
+		&summary.Name,
+		&summary.StartDate,
+		&summary.EndDate,
+		&summary.Status,
+		&summary.TerminatedAt,
+		&summary.TotalDays,
+		&summary.ItemCount,
+		&summary.TotalItems,
+		&summary.CompletedItems,
+	)
+	if err != nil {
+		return ChallengeDetail{}, err
+	}
+	summary.CompletionPercent = challengeCompletionPercent(summary.CompletedItems, summary.TotalItems)
+
+	rows, err := h.db.Query(`
+SELECT d.id,c.id,c.name,c.status,i.id,i.title,d.challenge_date,d.completed,d.completed_at
+FROM challenge_daily_items d
+JOIN challenge_items i ON i.id=d.challenge_item_id
+JOIN challenges c ON c.id=i.challenge_id
+WHERE c.id=?
+ORDER BY d.challenge_date,i.position,d.id`, id)
+	if err != nil {
+		return ChallengeDetail{}, err
+	}
+	defer rows.Close()
+
+	byDate := map[string]*ChallengeDay{}
+	orderedDates := []string{}
+	for rows.Next() {
+		var item ChallengeDailyItem
+		var status string
+		var completed int
+		if err := rows.Scan(&item.ID, &item.ChallengeID, &item.ChallengeName, &status, &item.ChallengeItemID, &item.Title, &item.ChallengeDate, &completed, &item.CompletedAt); err != nil {
+			return ChallengeDetail{}, err
+		}
+		item.Completed = completed == 1
+		day := byDate[item.ChallengeDate]
+		if day == nil {
+			day = &ChallengeDay{
+				ChallengeID:   item.ChallengeID,
+				ChallengeName: item.ChallengeName,
+				Status:        status,
+				Date:          item.ChallengeDate,
+				Items:         []ChallengeDailyItem{},
+			}
+			byDate[item.ChallengeDate] = day
+			orderedDates = append(orderedDates, item.ChallengeDate)
+		}
+		day.Items = append(day.Items, item)
+		day.TotalItems++
+		if item.Completed {
+			day.CompletedItems++
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return ChallengeDetail{}, err
+	}
+
+	days := make([]ChallengeDay, 0, len(orderedDates))
+	for _, date := range orderedDates {
+		day := byDate[date]
+		day.CompletionPercent = challengeCompletionPercent(day.CompletedItems, day.TotalItems)
+		days = append(days, *day)
+	}
+	return ChallengeDetail{Challenge: summary, Days: days}, nil
 }
 
 func (h *SQLiteHandler) UpdateChallengeDailyItem(id int, completed bool) (ChallengeDailyItem, error) {
@@ -430,6 +588,47 @@ func (s *Server) handleChallenge(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	path := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/challenges/"), "/")
 	parts := strings.Split(path, "/")
+	if path == "history" && r.Method == http.MethodGet {
+		history, err := s.csv.LoadChallengeHistory()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(history)
+		return
+	}
+	if path == "history/day" && r.Method == http.MethodGet {
+		date := r.URL.Query().Get("date")
+		if _, err := time.Parse("2006-01-02", date); err != nil {
+			http.Error(w, "Invalid challenge date", http.StatusBadRequest)
+			return
+		}
+		days, err := s.csv.LoadChallengeHistoryDay(date)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(days)
+		return
+	}
+	if len(parts) == 1 && r.Method == http.MethodGet {
+		id, err := strconv.Atoi(parts[0])
+		if err != nil || id < 1 {
+			http.Error(w, "Invalid challenge ID", http.StatusBadRequest)
+			return
+		}
+		detail, err := s.csv.LoadChallengeDetail(id)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				http.Error(w, "Challenge not found", http.StatusNotFound)
+				return
+			}
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(detail)
+		return
+	}
 	if len(parts) != 2 || parts[1] != "terminate" || r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return

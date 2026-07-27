@@ -2,11 +2,20 @@
 /fitness-tracker
 /backend/fitness-tracker
 /dist/
+/android/.gradle/
+/android/local.properties
+/android/app/build/
+*.jks
+*.keystore
 
 # Runtime files
 *.log
 *.pid
 /.fitness-tracker.env
+*.key
+*.crt
+*.csr
+*.p12
 /data/
 /data.tar.gz
 /backend/data/*.db

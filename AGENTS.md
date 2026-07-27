@@ -48,6 +48,34 @@ SKIP_UPLOAD=1 ./package_release.sh
 
 发布包不得包含 `.fitness-tracker.env` 或真实 token。
 
+### 构建 Android APK
+
+Android 客户端位于 `android/`，是加载当前 HTTPS 前端的 WebView 应用。运行：
+
+```bash
+./scripts/build_android.sh
+```
+
+签名密钥固定保存在仓库外的 `/root/.config/fitness-tracker/android/fitness-release.jks`，不得提交、打包、上传或重新生成替换。构建产物为 `dist/fitness-tracker.apk`。云端文件路径为 `/root/lbs/fitness/downloads/fitness-tracker.apk`，下载地址为 `https://111.230.63.109:19797/downloads/fitness-tracker.apk`。
+
+Android WebView 会通过 `frontend/service-worker.js` 缓存最近成功加载的页面和 GET API 响应，离线模式仅供查看，所有写操作仍需联网。每日训练提醒默认关闭，由用户在 App 内主动设置；提醒配置会在设备重启后恢复。
+
+### 上传 HTML 分析报告
+
+服务将 `.htm`/`.html` 报告保存在 `DATA_DIR/reports`，可通过 `REPORT_DIR`
+覆盖。App 的“报告”页面会读取 `/api/reports` 列表并展示报告内容。
+
+上传接口必须配置仓库外的 `REPORT_UPLOAD_TOKEN`，然后在开发机运行：
+
+```bash
+REPORT_UPLOAD_TOKEN=... ./scripts/upload_report.sh report.htm
+```
+
+也可以直接请求 `PUT /api/reports/{name.htm}`，请求体为 HTML，认证头为
+`Authorization: Bearer ...`。云端 systemd 从仓库外的
+`/root/.config/fitness-tracker/fitness-tracker.env` 读取 token。不得把真实 token
+写入仓库、发布包或日志。
+
 ### 云端首次部署
 
 将发布包解压到云主机后启动服务：
@@ -65,7 +93,7 @@ chmod +x fitness-tracker start_cloud.sh sync_from_cloud.sh
 ./start_cloud.sh stop
 ```
 
-云端默认监听 `183.36.16.116:19797`。如部署地址变化，必须通过 `LISTEN_ADDR` 覆盖，不能为新环境继续硬编码地址。
+新云主机部署目录为 `/root/lbs/fitness`，监听 `0.0.0.0:19797`，公网地址为 `https://111.230.63.109:19797/`。云端通过 `TLS_CERT_FILE` 和 `TLS_KEY_FILE` 启用 HTTPS，不请求或校验客户端证书；证书文件位于 `/root/lbs/fitness/tls`。如部署地址变化，必须通过 `LISTEN_ADDR` 覆盖，不能为新环境继续硬编码地址。
 
 ### 从云端同步数据库到本地
 
@@ -82,14 +110,16 @@ chmod +x fitness-tracker start_cloud.sh sync_from_cloud.sh
 - 同步接口不做应用层认证，任何能访问 `/api/sync/database` 的客户端都可以下载完整 SQLite 数据库。必须通过网络层限制访问范围，例如内网、VPN、SSH 隧道、防火墙或反向代理 ACL。
 - 当前同步方向是云端到本地的单向覆盖，不进行双向合并。同步前会备份本地数据库，但本地未上传的数据仍可能因覆盖而从工作数据库中消失。
 - 云端通过 SQLite `VACUUM INTO` 生成一致快照，以支持数据库处于 WAL 模式或服务仍在写入的场景；本地替换数据库时服务必须停止。
-- 当前默认 `CLOUD_URL` 使用 HTTP，生产环境应使用 HTTPS、VPN 或 SSH 隧道；在完成传输层保护前，不应通过公网明文同步。
+- 默认 `CLOUD_URL` 使用新云主机的 HTTPS 地址，同步脚本从仓库外的 `/root/.config/fitness-tracker/tls` 读取 `ca.crt` 校验服务端证书，不使用客户端证书。
 
 ## 验证要求
 
 修改启动或同步逻辑后至少运行：
 
 ```bash
-bash -n start.sh start_cloud.sh sync_from_cloud.sh package_release.sh
+bash -n start.sh start_cloud.sh sync_from_cloud.sh package_release.sh scripts/generate_tls_certs.sh
 cd backend
 GOCACHE=/tmp/go-build-cache go test ./...
 ```
+
+修改 Android 工程后还必须运行 `./scripts/build_android.sh`，确认 Android Lint、release 构建和 `apksigner` 验证成功。

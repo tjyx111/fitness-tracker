@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -13,8 +14,10 @@ import (
 
 // Server 服务器和依赖
 type Server struct {
-	csv      *SQLiteHandler
-	analyzer *ProgressAnalyzer
+	csv               *SQLiteHandler
+	analyzer          *ProgressAnalyzer
+	reportDir         string
+	reportUploadToken string
 }
 
 func NewServer(dataDir string) (*Server, error) {
@@ -22,10 +25,15 @@ func NewServer(dataDir string) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Server{
+	server := &Server{
 		csv:      csv,
 		analyzer: NewProgressAnalyzer(csv),
-	}, nil
+	}
+	if err := server.configureReports(filepath.Join(dataDir, "reports"), ""); err != nil {
+		csv.Close()
+		return nil, err
+	}
+	return server, nil
 }
 
 // ========== 动作管理 ==========

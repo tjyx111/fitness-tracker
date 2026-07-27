@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Fitness</string>
+    <string name="tls_error">无法验证 Fitness 服务证书，请检查网络或更新应用。</string>
+    <string name="offline_title">暂时无法连接 Fitness</string>
+    <string name="offline_message">首次使用需要联网。成功打开一次后，断网时仍可查看最近缓存的数据。</string>
+    <string name="offline_retry">重新连接</string>
+    <string name="reminder_title">每日训练提醒</string>
+    <string name="reminder_enabled">已设置每天 %1$02d:%2$02d 提醒</string>
+    <string name="reminder_disabled">训练提醒已关闭</string>
+    <string name="reminder_permission_denied">未获得通知权限，无法开启提醒</string>
+    <string name="reminder_enable">每天提醒</string>
+    <string name="reminder_disable">关闭提醒</string>
+    <string name="reminder_cancel">取消</string>
+    <string name="notification_channel_name">训练提醒</string>
+    <string name="notification_title">该动一动了</string>
+    <string name="notification_text">打开 Fitness，完成今天的训练记录。</string>
+</resources>

@@ -8,9 +8,14 @@ if [ ! -x "$BIN" ] && [ -x "$APP_DIR/backend/fitness-tracker" ]; then
 fi
 
 DATA_DIR="${DATA_DIR:-$APP_DIR/data}"
-LISTEN_ADDR="${LISTEN_ADDR:-183.36.16.116:19797}"
+LISTEN_ADDR="${LISTEN_ADDR:-0.0.0.0:19797}"
 LOG_FILE="${LOG_FILE:-$APP_DIR/fitness-tracker.log}"
 PID_FILE="${PID_FILE:-$APP_DIR/fitness-tracker.pid}"
+APK_FILE="${APK_FILE:-$APP_DIR/downloads/fitness-tracker.apk}"
+TLS_CERT_FILE="${TLS_CERT_FILE:-}"
+TLS_KEY_FILE="${TLS_KEY_FILE:-}"
+REPORT_DIR="${REPORT_DIR:-$DATA_DIR/reports}"
+REPORT_UPLOAD_TOKEN="${REPORT_UPLOAD_TOKEN:-}"
 
 start() {
   if [ ! -x "$BIN" ]; then
@@ -24,12 +29,27 @@ start() {
   fi
 
   mkdir -p "$DATA_DIR"
-  nohup env DATA_DIR="$DATA_DIR" LISTEN_ADDR="$LISTEN_ADDR" "$BIN" > "$LOG_FILE" 2>&1 &
+  nohup env \
+    DATA_DIR="$DATA_DIR" \
+    LISTEN_ADDR="$LISTEN_ADDR" \
+    APK_FILE="$APK_FILE" \
+    TLS_CERT_FILE="$TLS_CERT_FILE" \
+    TLS_KEY_FILE="$TLS_KEY_FILE" \
+    REPORT_DIR="$REPORT_DIR" \
+    REPORT_UPLOAD_TOKEN="$REPORT_UPLOAD_TOKEN" \
+    "$BIN" > "$LOG_FILE" 2>&1 &
   echo $! > "$PID_FILE"
   echo "fitness-tracker started"
   echo "pid: $(cat "$PID_FILE")"
   echo "listen: $LISTEN_ADDR"
   echo "data: $DATA_DIR"
+  echo "reports: $REPORT_DIR"
+  echo "apk: $APK_FILE"
+  if [ -n "$TLS_CERT_FILE" ]; then
+    echo "protocol: https"
+  else
+    echo "protocol: http"
+  fi
   echo "log: $LOG_FILE"
 }
 

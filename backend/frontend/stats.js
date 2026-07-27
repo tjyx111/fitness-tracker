@@ -66,8 +66,8 @@ function renderChallengeStats(stats) {
             <h4>挑战事项统计</h4>
             <div class="challenge-stats-items">
                 ${(stats.itemStats || []).length
-                    ? stats.itemStats.map(item => `<p><span>${escapeHtml(item.title)}</span><strong>${item.completedDays} / ${item.totalDays} · ${Math.round(item.completionPercent)}%</strong></p>`).join('')
-                    : '<p>当前周期没有挑战事项</p>'}
+                    ? stats.itemStats.map(item => `<p><span><small>${escapeHtml(item.challengeName)}</small>${escapeHtml(item.title)}</span><strong>${item.completedDays} / ${item.totalDays} · ${Math.round(item.completionPercent)}%</strong></p>`).join('')
+                    : '<p>所选周期没有挑战记录</p>'}
             </div>
         </div>
     `;
@@ -145,7 +145,7 @@ function getChallengeHeatmapLevel(percent) {
 async function loadChallengeDayRecords(date) {
     const container = document.getElementById('day-records');
     try {
-        const response = await fetch(`${API_BASE}/challenges?date=${encodeURIComponent(date)}`);
+        const response = await fetch(`${API_BASE}/challenges/history/day?date=${encodeURIComponent(date)}`);
         if (!response.ok) throw new Error(await response.text());
         const days = await response.json();
         if (!days.length) {
@@ -157,7 +157,7 @@ async function loadChallengeDayRecords(date) {
             <div class="challenge-day-list">
                 ${days.map(day => `
                     <section class="challenge-card compact">
-                        <div class="challenge-card-header"><h3>${escapeHtml(day.challengeName)}</h3><p>${day.completedItems} / ${day.totalItems} · ${Math.round(day.completionPercent)}%</p></div>
+                        <div class="challenge-card-header"><div><span class="challenge-status-badge ${escapeHtml(day.status)}">${formatChallengeStatus(day.status)}</span><h3>${escapeHtml(day.challengeName)}</h3></div><p>${day.completedItems} / ${day.totalItems} · ${Math.round(day.completionPercent)}%</p></div>
                         <div class="challenge-items-list">${day.items.map(item => `<div class="challenge-item ${item.completed ? 'completed' : ''}"><span>${item.completed ? '已完成' : '未完成'}</span><span>${escapeHtml(item.title)}</span></div>`).join('')}</div>
                     </section>
                 `).join('')}
