@@ -5,6 +5,8 @@
     <string name="offline_title">暂时无法连接 Fitness</string>
     <string name="offline_message">首次使用需要联网。成功打开一次后，断网时仍可查看最近缓存的数据。</string>
     <string name="offline_retry">重新连接</string>
+    <string name="report_link_invalid">报告下载地址无效</string>
+    <string name="report_browser_unavailable">未找到可用于下载报告的浏览器</string>
     <string name="reminder_title">每日训练提醒</string>
     <string name="reminder_enabled">已设置每天 %1$02d:%2$02d 提醒</string>
     <string name="reminder_disabled">训练提醒已关闭</string>

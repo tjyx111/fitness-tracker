@@ -228,6 +228,13 @@ textarea:focus-visible {
     margin-top: 16px;
 }
 
+.report-list-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: stretch;
+    gap: 8px;
+}
+
 .report-list-item {
     width: 100%;
     min-height: 70px;
@@ -242,6 +249,27 @@ textarea:focus-visible {
     color: var(--app-text);
     text-align: left;
     cursor: pointer;
+}
+
+.report-download-button {
+    min-width: 58px;
+    display: grid;
+    place-items: center;
+    padding: 0 12px;
+    border: 1px solid rgba(15, 118, 110, 0.22);
+    border-radius: 16px;
+    background: var(--app-primary-container);
+    color: var(--app-primary);
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.report-download-button:hover,
+.report-download-button:focus-visible {
+    border-color: var(--app-primary);
+    background: var(--app-primary);
+    color: white;
 }
 
 .report-list-item:hover,
@@ -294,6 +322,15 @@ textarea:focus-visible {
     display: flex;
     min-width: 0;
     flex-direction: column;
+}
+
+.report-viewer-panel[hidden] {
+    display: none;
+}
+
+body:not(.is-android-app) .report-layout {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 0;
 }
 
 .report-viewer-header {

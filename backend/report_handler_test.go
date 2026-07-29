@@ -48,7 +48,9 @@ func TestReportUploadListAndRead(t *testing.T) {
 	if len(reports) != 1 || reports[0].Name != "weekly-report.htm" {
 		t.Fatalf("unexpected reports: %#v", reports)
 	}
-	if reports[0].URL != "/api/reports/weekly-report.htm" || reports[0].Size != int64(len(html)) {
+	if reports[0].URL != "/api/reports/weekly-report.htm" ||
+		reports[0].DownloadURL != "/api/reports/weekly-report.htm?download=1" ||
+		reports[0].Size != int64(len(html)) {
 		t.Fatalf("unexpected report metadata: %#v", reports[0])
 	}
 
@@ -63,8 +65,26 @@ func TestReportUploadListAndRead(t *testing.T) {
 	if got := readRecorder.Header().Get("Content-Type"); got != "text/html; charset=utf-8" {
 		t.Fatalf("Content-Type=%q", got)
 	}
+	if got := readRecorder.Header().Get("Content-Disposition"); !strings.HasPrefix(got, "inline;") {
+		t.Fatalf("Content-Disposition=%q", got)
+	}
 	if got := readRecorder.Header().Get("Content-Security-Policy"); !strings.Contains(got, "sandbox allow-scripts") {
 		t.Fatalf("Content-Security-Policy=%q", got)
+	}
+
+	downloadRecorder := httptest.NewRecorder()
+	server.handleReport(
+		downloadRecorder,
+		httptest.NewRequest(http.MethodGet, reports[0].DownloadURL, nil),
+	)
+	if downloadRecorder.Code != http.StatusOK {
+		t.Fatalf("download code=%d body=%s", downloadRecorder.Code, downloadRecorder.Body.String())
+	}
+	if got := downloadRecorder.Header().Get("Content-Disposition"); !strings.HasPrefix(got, "attachment;") {
+		t.Fatalf("download Content-Disposition=%q", got)
+	}
+	if downloadRecorder.Body.String() != html {
+		t.Fatalf("download report differs: %q", downloadRecorder.Body.String())
 	}
 }
 

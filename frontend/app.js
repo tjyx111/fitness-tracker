@@ -34,6 +34,7 @@ let state = {
     challengeRefreshTimer: null,
     reports: [],
     selectedReportName: null,
+    isAndroidApp: false,
     statsDashboardTemplate: ''
 };
 
@@ -68,6 +69,17 @@ function initAppEnvironment() {
     const reminderButton = document.getElementById('android-reminder-btn');
     const isAndroidApp = Boolean(window.FitnessAndroid
         && typeof window.FitnessAndroid.openReminderSettings === 'function');
+    state.isAndroidApp = isAndroidApp;
+    const reportViewer = document.getElementById('report-viewer-panel');
+    const reportModeHint = document.getElementById('report-mode-hint');
+    if (reportViewer) {
+        reportViewer.hidden = !isAndroidApp;
+    }
+    if (reportModeHint) {
+        reportModeHint.textContent = isAndroidApp
+            ? '点击报告后在 App 内查看，也可单独下载'
+            : '点击报告后使用浏览器新标签查看，也可单独下载';
+    }
     if (reminderButton && isAndroidApp) {
         reminderButton.hidden = false;
         document.body.classList.add('is-android-app');
@@ -229,12 +241,14 @@ async function loadReportsPage() {
         if (!selectedStillExists) {
             state.selectedReportName = null;
         }
-        if (!state.selectedReportName && state.reports.length > 0) {
+        if (state.isAndroidApp && !state.selectedReportName && state.reports.length > 0) {
             openReport(state.reports[0].name);
-        } else if (state.selectedReportName) {
+        } else if (state.isAndroidApp && state.selectedReportName) {
             openReport(state.selectedReportName);
         } else {
-            clearReportViewer('当前没有可查看的 HTML 报告');
+            clearReportViewer(state.reports.length > 0
+                ? '从报告列表选择一份报告查看内容'
+                : '当前没有可查看的 HTML 报告');
         }
     } catch (error) {
         console.error('Failed to load reports:', error);
@@ -257,28 +271,56 @@ function renderReports() {
     }
 
     list.innerHTML = state.reports.map(report => `
-        <button
-            type="button"
-            class="report-list-item ${report.name === state.selectedReportName ? 'active' : ''}"
-            data-report-name="${escapeHtml(report.name)}"
-            role="listitem">
-            <span class="report-list-icon" aria-hidden="true">HTML</span>
-            <span class="report-list-copy">
-                <strong>${escapeHtml(report.name)}</strong>
-                <small>${formatReportTime(report.updatedAt)} · ${formatReportSize(report.size)}</small>
-            </span>
-            <span class="report-list-chevron" aria-hidden="true">›</span>
-        </button>
+        <div class="report-list-row" role="listitem">
+            <button
+                type="button"
+                class="report-list-item ${report.name === state.selectedReportName ? 'active' : ''}"
+                data-report-name="${escapeHtml(report.name)}">
+                <span class="report-list-icon" aria-hidden="true">HTML</span>
+                <span class="report-list-copy">
+                    <strong>${escapeHtml(report.name)}</strong>
+                    <small>${formatReportTime(report.updatedAt)} · ${formatReportSize(report.size)}</small>
+                </span>
+                <span class="report-list-chevron" aria-hidden="true">›</span>
+            </button>
+            <a
+                class="report-download-button"
+                href="${escapeHtml(report.downloadUrl || `${report.url}?download=1`)}"
+                download="${escapeHtml(report.name)}"
+                data-report-download="${escapeHtml(report.name)}"
+                aria-label="下载 ${escapeHtml(report.name)}"
+                title="下载报告">下载</a>
+        </div>
     `).join('');
 
     list.querySelectorAll('.report-list-item').forEach(button => {
         button.addEventListener('click', () => openReport(button.dataset.reportName));
+    });
+    list.querySelectorAll('[data-report-download]').forEach(link => {
+        link.addEventListener('click', event => {
+            if (!state.isAndroidApp
+                    || !window.FitnessAndroid
+                    || typeof window.FitnessAndroid.openReportInBrowser !== 'function') {
+                return;
+            }
+            event.preventDefault();
+            const downloadURL = new URL(link.href, window.location.href);
+            window.FitnessAndroid.openReportInBrowser(downloadURL.href);
+        });
     });
 }
 
 function openReport(name) {
     const report = state.reports.find(item => item.name === name);
     if (!report) return;
+
+    if (!state.isAndroidApp) {
+        const reportWindow = window.open(report.url, '_blank', 'noopener,noreferrer');
+        if (reportWindow) {
+            reportWindow.opener = null;
+        }
+        return;
+    }
 
     state.selectedReportName = name;
     document.getElementById('report-viewer-title').textContent = name;

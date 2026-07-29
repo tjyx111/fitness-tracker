@@ -153,6 +153,27 @@ public final class MainActivity extends Activity {
         webView.loadUrl(APP_URL);
     }
 
+    private void openReportInBrowser(String rawUrl) {
+        Uri uri = Uri.parse(rawUrl);
+        int port = uri.getPort() == -1 ? 443 : uri.getPort();
+        String path = uri.getPath();
+        if (!"https".equalsIgnoreCase(uri.getScheme())
+                || !APP_HOST.equalsIgnoreCase(uri.getHost())
+                || port != APP_PORT
+                || path == null
+                || !path.startsWith("/api/reports/")) {
+            Toast.makeText(this, R.string.report_link_invalid, Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        Intent intent = new Intent(Intent.ACTION_VIEW, uri);
+        if (intent.resolveActivity(getPackageManager()) == null) {
+            Toast.makeText(this, R.string.report_browser_unavailable, Toast.LENGTH_LONG).show();
+            return;
+        }
+        startActivity(intent);
+    }
+
     private void showReminderSettings() {
         TimePicker picker = new TimePicker(this);
         picker.setIs24HourView(true);
@@ -211,6 +232,11 @@ public final class MainActivity extends Activity {
         @JavascriptInterface
         public void reloadApp() {
             runOnUiThread(MainActivity.this::reloadApp);
+        }
+
+        @JavascriptInterface
+        public void openReportInBrowser(String url) {
+            runOnUiThread(() -> MainActivity.this.openReportInBrowser(url));
         }
     }
 

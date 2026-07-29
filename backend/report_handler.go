@@ -20,10 +20,11 @@ import (
 const maxReportSize = 10 << 20
 
 type reportInfo struct {
-	Name      string    `json:"name"`
-	Size      int64     `json:"size"`
-	UpdatedAt time.Time `json:"updatedAt"`
-	URL       string    `json:"url"`
+	Name        string    `json:"name"`
+	Size        int64     `json:"size"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+	URL         string    `json:"url"`
+	DownloadURL string    `json:"downloadUrl"`
 }
 
 func (s *Server) configureReports(reportDir, uploadToken string) error {
@@ -64,11 +65,13 @@ func (s *Server) handleReports(w http.ResponseWriter, r *http.Request) {
 		if err != nil || !info.Mode().IsRegular() {
 			continue
 		}
+		reportURL := "/api/reports/" + url.PathEscape(entry.Name())
 		reports = append(reports, reportInfo{
-			Name:      entry.Name(),
-			Size:      info.Size(),
-			UpdatedAt: info.ModTime(),
-			URL:       "/api/reports/" + url.PathEscape(entry.Name()),
+			Name:        entry.Name(),
+			Size:        info.Size(),
+			UpdatedAt:   info.ModTime(),
+			URL:         reportURL,
+			DownloadURL: reportURL + "?download=1",
 		})
 	}
 	sort.Slice(reports, func(i, j int) bool {
@@ -123,8 +126,12 @@ func (s *Server) serveReport(w http.ResponseWriter, r *http.Request, name string
 	}
 	defer f.Close()
 
+	disposition := "inline"
+	if r.URL.Query().Get("download") == "1" {
+		disposition = "attachment"
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Content-Disposition", mime.FormatMediaType("inline", map[string]string{"filename": name}))
+	w.Header().Set("Content-Disposition", mime.FormatMediaType(disposition, map[string]string{"filename": name}))
 	w.Header().Set("Content-Security-Policy", "sandbox allow-scripts; default-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https:; script-src 'self' 'unsafe-inline' https:; img-src 'self' data: blob: https:; font-src 'self' data: https:; connect-src 'none'; form-action 'none'; base-uri 'none'")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Referrer-Policy", "no-referrer")

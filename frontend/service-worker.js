@@ -1,5 +1,5 @@
-const STATIC_CACHE = 'fitness-static-v5';
-const DATA_CACHE = 'fitness-data-v5';
+const STATIC_CACHE = 'fitness-static-v6';
+const DATA_CACHE = 'fitness-data-v6';
 const STATIC_ASSETS = [
     '/',
     '/styles.css',
@@ -36,6 +36,8 @@ self.addEventListener('fetch', event => {
     const url = new URL(request.url);
     if (url.origin !== self.location.origin
             || url.pathname === '/api/sync/database'
+            || (url.pathname.startsWith('/api/reports/')
+                && url.searchParams.get('download') === '1')
             || url.pathname.startsWith('/downloads/')) {
         return;
     }
