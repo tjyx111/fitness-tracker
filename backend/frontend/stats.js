@@ -32,12 +32,13 @@ async function loadStatistics() {
 
 // 加载总览统计
 async function loadOverviewStats(days) {
-    await loadFilteredStats('overview', '', days, `最近${days}天训练情况`);
+    await loadProgressStats('overview', '', days, `最近${days}天训练情况`);
 }
 
 async function loadTodoStats(days) {
     const todos = await fetch(`${API_BASE}/todos`).then(r => r.json());
     renderTodoStats(todos || []);
+    hideProgressExerciseList();
     hideExerciseTrendChart();
     renderTodoCalendar(todos || [], parseInt(days, 10) || 30);
     resetTodoDayRecords();
@@ -48,6 +49,7 @@ async function loadChallengeStats(days) {
     if (!response.ok) throw new Error(await response.text());
     const stats = await response.json();
     renderChallengeStats(stats);
+    hideProgressExerciseList();
     hideExerciseTrendChart();
     renderChallengeCalendar(stats.daily || [], parseInt(days, 10) || 30);
     resetChallengeDayRecords();
@@ -347,8 +349,9 @@ function renderTodoDayRecords(date, items) {
 // 加载单个动作统计
 async function loadExerciseStats(exerciseId, days) {
     try {
-        const [exercises, stats, calendar] = await Promise.all([
+        const [exercises, progress, stats, calendar] = await Promise.all([
             fetch(`${API_BASE}/exercises`).then(r => r.json()),
+            fetch(`${API_BASE}/stats/progress-summary?${buildProgressQuery('exercise', exerciseId, days)}`).then(r => r.json()),
             fetch(`${API_BASE}/stats/filtered?${buildStatsQuery('exercise', exerciseId, days)}`).then(r => r.json()),
             fetch(`${API_BASE}/stats/calendar?days=${days}&type=exercise&target=${exerciseId}`).then(r => r.json())
         ]);
@@ -356,7 +359,7 @@ async function loadExerciseStats(exerciseId, days) {
         const exerciseData = exercises.find(e => e.id == exerciseId);
         if (!exerciseData) return;
 
-        renderFilteredStats(stats);
+        renderProgressStats(progress);
         renderExerciseTrendChart(exerciseData, stats.dailyScores || []);
         renderTrainingCalendar(calendar, `${exerciseData.name} - 最近${days}天训练情况`);
         resetDayRecords();
@@ -367,19 +370,27 @@ async function loadExerciseStats(exerciseId, days) {
 
 // 加载肌肉群统计
 async function loadMuscleStats(muscleGroup, days) {
-    await loadFilteredStats('muscle', muscleGroup, days, `${muscleGroup} - 最近${days}天训练情况`);
+    await loadProgressStats('muscle', muscleGroup, days, `${muscleGroup} - 最近${days}天训练情况`);
 }
 
-async function loadFilteredStats(type, target, days, calendarTitle) {
-    const [stats, calendar] = await Promise.all([
-        fetch(`${API_BASE}/stats/filtered?${buildStatsQuery(type, target, days)}`).then(r => r.json()),
+async function loadProgressStats(type, target, days, calendarTitle) {
+    const [progress, calendar] = await Promise.all([
+        fetch(`${API_BASE}/stats/progress-summary?${buildProgressQuery(type, target, days)}`).then(r => r.json()),
         fetch(`${API_BASE}/stats/calendar?days=${days}&type=${encodeURIComponent(type)}&target=${encodeURIComponent(target)}`).then(r => r.json())
     ]);
 
-    renderFilteredStats(stats);
+    renderProgressStats(progress);
     hideExerciseTrendChart();
     renderTrainingCalendar(calendar, calendarTitle);
     resetDayRecords();
+}
+
+function buildProgressQuery(type, target, days) {
+    return new URLSearchParams({
+        days,
+        type,
+        target: target || ''
+    }).toString();
 }
 
 function buildStatsQuery(type, target, days) {
@@ -426,6 +437,107 @@ function renderFilteredStats(stats) {
             ${bestLines || '<p>暂无最佳表现</p>'}
         </div>
     `;
+}
+
+function renderProgressStats(stats) {
+    const dashboard = document.querySelector('.stats-dashboard');
+    const counts = stats?.counts || {};
+    const overall = formatProgressPercent(stats?.overallProgressPercent);
+    const period = stats?.startDate && stats?.endDate
+        ? `${stats.startDate} 至 ${stats.endDate}`
+        : `最近${stats?.days || 0}天`;
+    dashboard.innerHTML = `
+        <div class="stats-card progress-overall-card ${getProgressValueClass(stats?.overallProgressPercent)}">
+            <h3>周期整体进展</h3>
+            <div class="stat-value">${overall}</div>
+            <p>${period}</p>
+        </div>
+        <div class="stats-card">
+            <h3>动作方向</h3>
+            <div class="progress-count-line">
+                <span class="progress-count improved">${counts.improved || 0} 提升</span>
+                <span class="progress-count stable">${counts.stable || 0} 稳定</span>
+                <span class="progress-count declined">${counts.declined || 0} 下降</span>
+            </div>
+        </div>
+        <div class="stats-card">
+            <h3>有效覆盖</h3>
+            <div class="stat-value">${formatNumber(stats?.coveragePercent || 0)}%</div>
+            <p>${(counts.untrained || 0)} 未训练 · ${(counts.insufficient || 0)} 数据不足</p>
+        </div>
+        <div class="stats-card">
+            <h3>计算方式</h3>
+            <p><strong>40%</strong> 总容量</p>
+            <p><strong>60%</strong> 最佳表现</p>
+            <p>最近记录权重更高</p>
+        </div>
+    `;
+    renderProgressExerciseList(stats?.exercises || []);
+}
+
+function renderProgressExerciseList(exercises) {
+    const section = document.getElementById('progress-exercise-section');
+    const list = document.getElementById('progress-exercise-list');
+    const count = document.getElementById('progress-exercise-count');
+    if (!section || !list || !count) return;
+
+    section.hidden = false;
+    count.textContent = `${exercises.length} 个`;
+    if (!exercises.length) {
+        list.innerHTML = '<p class="empty-hint">当前筛选条件没有动作</p>';
+        return;
+    }
+
+    const statusOrder = { declined: 0, improved: 1, stable: 2, untrained: 3, insufficient: 4 };
+    const ordered = [...exercises].sort((left, right) => {
+        const statusDiff = (statusOrder[left.status] ?? 9) - (statusOrder[right.status] ?? 9);
+        if (statusDiff !== 0) return statusDiff;
+        return String(left.exerciseName).localeCompare(String(right.exerciseName), 'zh-CN');
+    });
+    list.innerHTML = ordered.map(action => `
+        <article class="progress-exercise-row ${escapeHtml(action.status || 'insufficient')}">
+            <div class="progress-exercise-copy">
+                <strong>${escapeHtml(action.exerciseName)}</strong>
+                <small>${escapeHtml(action.muscleGroup || '未分类')} · ${action.lastTrainingDate || '暂无训练'}</small>
+            </div>
+            <div class="progress-exercise-result">
+                <strong class="${getProgressValueClass(action.progressPercent)}">${formatProgressPercent(action.progressPercent)}</strong>
+                <small>${getProgressStatusLabel(action.status)}${action.comparisons ? ` · ${action.comparisons}次比较` : ''}</small>
+            </div>
+        </article>
+    `).join('');
+}
+
+function hideProgressExerciseList() {
+    const section = document.getElementById('progress-exercise-section');
+    if (section) section.hidden = true;
+}
+
+function formatProgressPercent(value) {
+    if (value === null || value === undefined || value === '') return '—';
+    if (!Number.isFinite(Number(value))) return '—';
+    const numeric = Number(value);
+    const prefix = numeric > 0 ? '+' : '';
+    return `${prefix}${numeric.toFixed(1)}%`;
+}
+
+function getProgressValueClass(value) {
+    if (value === null || value === undefined || value === '') return 'insufficient';
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return 'insufficient';
+    if (numeric === 0) return 'stable';
+    return numeric > 0 ? 'improved' : 'declined';
+}
+
+function getProgressStatusLabel(status) {
+    const labels = {
+        improved: '提升',
+        stable: '稳定',
+        declined: '下降',
+        untrained: '本周期未训练',
+        insufficient: '数据不足'
+    };
+    return labels[status] || '数据不足';
 }
 
 function renderBestPerformanceLines(best) {
@@ -484,7 +596,7 @@ function formatRawValue(value, unit) {
     if (unit === 'reps') {
         return `${Math.round(value)}次`;
     }
-    return `${Math.round(value)}kg×次`;
+    return `${formatNumber(value)}kg`;
 }
 
 function renderExerciseTrendChart(exercise, dailyScores) {
@@ -561,11 +673,11 @@ function getTrendChartLabel(unit, mode = 'best') {
     if (mode === 'total') {
         if (unit === 'duration') return '总持续时间 (秒)';
         if (unit === 'reps') return '总次数';
-        return '总容量 (kg×次)';
+        return '组重量合计 (kg)';
     }
     if (unit === 'duration') return '最佳持续时间 (秒)';
     if (unit === 'reps') return '最佳次数';
-    return '最佳容量 (kg×次)';
+    return '最大重量 (kg)';
 }
 
 function getExerciseChartColor(unit) {
@@ -588,7 +700,7 @@ function hideExerciseTrendChart() {
 function resetDayRecords() {
     const container = document.getElementById('day-records');
     if (container) {
-        container.innerHTML = '<p style="color: #6c757d;">点击日历中的日期查看当天明细</p>';
+        container.innerHTML = '<p style="color: #6c757d;">点击有训练的日期查看当天所有动作的综合进展</p>';
     }
 }
 
@@ -806,7 +918,7 @@ function renderTrainingCalendar(trainingCalendar, title = '最近30天训练情�
         <div class="heatmap-header">
             <div>
                 <h3>${title}</h3>
-                <p>${summary.trainingDays || 0} 天训练 · ${summary.totalSets || 0} 组 · ${Math.round(summary.totalVolume || 0)} kg</p>
+                <p>${summary.trainingDays || 0} 天训练 · ${summary.totalSets || 0} 组</p>
             </div>
             <div class="heatmap-legend" aria-label="训练强度图例">
                 <span>少</span>
@@ -852,7 +964,7 @@ async function loadDayRecords(date) {
     });
 
     try {
-        const data = await fetch(`${API_BASE}/stats/day-records?${query.toString()}`).then(r => r.json());
+        const data = await fetch(`${API_BASE}/stats/progress-day?${query.toString()}`).then(r => r.json());
         renderDayRecords(data);
     } catch (error) {
         console.error('Failed to load day records:', error);
@@ -877,38 +989,31 @@ function getCurrentStatsFilter() {
 
 function renderDayRecords(data) {
     const container = document.getElementById('day-records');
-    const records = data?.records || [];
-    if (records.length === 0) {
-        container.innerHTML = `<p style="color: #6c757d;">${data?.date || ''} 暂无符合筛选条件的组</p>`;
+    const exercises = data?.exercises || [];
+    if (exercises.length === 0) {
+        container.innerHTML = `<p style="color: #6c757d;">${data?.date || ''} 没有符合筛选条件的训练动作</p>`;
         return;
     }
 
     container.innerHTML = `
         <div class="day-records-header">
             <h3>${data.date}</h3>
+            <p>${exercises.length} 个动作</p>
         </div>
-        <table class="data-table day-records-table">
-            <thead>
-                <tr>
-                    <th>动作</th>
-                    <th>肌群</th>
-                    <th>组</th>
-                    <th>记录</th>
-                    <th>raw</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${records.map(record => `
-                    <tr>
-                        <td>${record.exerciseName}</td>
-                        <td>${record.muscleGroup}</td>
-                        <td>第${record.setNumber}组</td>
-                        <td>${formatSetDetail(record)}</td>
-                        <td>${formatRawValue(record.value || 0, record.unit)}</td>
-                    </tr>
-                `).join('')}
-            </tbody>
-        </table>
+        <div class="day-progress-list">
+            ${exercises.map(action => `
+                <div class="day-progress-row ${escapeHtml(action.status || 'insufficient')}">
+                    <div>
+                        <strong>${escapeHtml(action.exerciseName)}</strong>
+                        <small>${escapeHtml(action.muscleGroup || '未分类')}</small>
+                    </div>
+                    <div>
+                        <strong class="${getProgressValueClass(action.progressPercent)}">${formatProgressPercent(action.progressPercent)}</strong>
+                        <small>${getProgressStatusLabel(action.status)}</small>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
     `;
 }
 
@@ -1104,46 +1209,45 @@ function refreshStats() {
 // 导出统计报告
 async function exportStatsReport() {
     const days = document.getElementById('stats-period').value;
-    const growthPercentile = getStatsGrowthPercentile();
+    const filter = getCurrentStatsFilter();
 
     try {
-        const response = await fetch(`${API_BASE}/stats/report?days=${days}&growthPercentile=${growthPercentile}`);
+        const response = await fetch(`${API_BASE}/stats/progress-summary?${buildProgressQuery(filter.type, filter.target, days)}`);
+        if (!response.ok) throw new Error(await response.text());
         const report = await response.json();
 
-        // 生成CSV格式
-        let csv = '健身统计报告\n';
-        csv += `统计周期: 最近${days}天\n`;
-        csv += `生成时间: ${report.generatedAt}\n\n`;
-
-        // 容量统计
-        csv += '容量统计\n';
-        csv += `总容量,${Math.round(report.volumeStats.totalVolume)}\n`;
-        csv += `平均容量,${Math.round(report.volumeStats.averageVolume)}\n`;
-        csv += `最大容量,${Math.round(report.volumeStats.maxVolume)}\n`;
-        csv += `增长率分位,P${Math.round(report.volumeStats.volumeGrowthPercentile || growthPercentile)}\n`;
-        csv += `上个半周期指数,${Math.round(report.volumeStats.previousPeriodVolumeIndex || 0)}\n`;
-        csv += `最近半周期指数,${Math.round(report.volumeStats.recentPeriodVolumeIndex || 0)}\n`;
-        csv += `容量增长率,${report.volumeStats.volumeGrowthRate.toFixed(2)}%\n\n`;
-
-        // 个人记录
-        csv += '个人记录\n';
-        csv += '动作名称,最大重量(kg),最大容量(kg),最大次数,最长持续时间(秒)\n';
-        report.personalRecords.forEach(pr => {
-            csv += `${pr.exerciseName},${pr.maxWeight},${Math.round(pr.maxVolume)},${pr.maxReps},${pr.maxDuration}\n`;
+        let csv = '\ufeffFitness 动作综合进展\n';
+        csv += `统计周期,${report.startDate} 至 ${report.endDate}\n`;
+        csv += `整体进展,${formatProgressPercent(report.overallProgressPercent)}\n`;
+        csv += `有效覆盖,${formatNumber(report.coveragePercent || 0)}%\n\n`;
+        csv += '动作,肌群,综合进展,状态,有效比较次数,最近训练\n';
+        (report.exercises || []).forEach(action => {
+            csv += [
+                csvCell(action.exerciseName),
+                csvCell(action.muscleGroup),
+                csvCell(formatProgressPercent(action.progressPercent)),
+                csvCell(getProgressStatusLabel(action.status)),
+                action.comparisons || 0,
+                csvCell(action.lastTrainingDate || '')
+            ].join(',') + '\n';
         });
-        csv += '\n';
 
         // 下载文件
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = `fitness_stats_report_${new Date().toISOString().split('T')[0]}.csv`;
+        link.download = `fitness_progress_${new Date().toISOString().split('T')[0]}.csv`;
         link.click();
+        URL.revokeObjectURL(link.href);
 
     } catch (error) {
         console.error('Failed to export report:', error);
         alert('导出失败，请重试');
     }
+}
+
+function csvCell(value) {
+    return `"${String(value ?? '').replace(/"/g, '""')}"`;
 }
 
 // 渲染单个动作统计
@@ -1599,16 +1703,3 @@ function restoreStatsDashboard() {
         dashboard.innerHTML = state.statsDashboardTemplate;
     }
 }
-
-// 统计周期变化时重新加载
-document.addEventListener('DOMContentLoaded', () => {
-    const statsPeriodSelect = document.getElementById('stats-period');
-    if (statsPeriodSelect) {
-        statsPeriodSelect.addEventListener('change', loadStatistics);
-    }
-
-    const statsPercentileSelect = document.getElementById('stats-percentile');
-    if (statsPercentileSelect) {
-        statsPercentileSelect.addEventListener('change', loadStatistics);
-    }
-});

@@ -1623,6 +1623,120 @@ textarea {
     padding: 20px;
 }
 
+.progress-exercise-section[hidden] {
+    display: none;
+}
+
+.progress-overall-card.improved {
+    border-color: #86efac;
+    background: linear-gradient(145deg, #f0fdf4, #dcfce7);
+}
+
+.progress-overall-card.declined {
+    border-color: #fecaca;
+    background: linear-gradient(145deg, #fff7f7, #fee2e2);
+}
+
+.progress-count-line {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.progress-count {
+    padding: 7px 10px;
+    border-radius: 999px;
+    background: var(--app-bg);
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.progress-count.improved,
+.progress-exercise-result .improved,
+.day-progress-row .improved {
+    color: #15803d;
+}
+
+.progress-count.declined,
+.progress-exercise-result .declined,
+.day-progress-row .declined {
+    color: #b91c1c;
+}
+
+.progress-count.stable,
+.progress-exercise-result .stable,
+.day-progress-row .stable {
+    color: var(--app-text-soft);
+}
+
+.progress-exercise-list,
+.day-progress-list {
+    display: grid;
+    gap: 9px;
+    margin-top: 16px;
+}
+
+.progress-exercise-row,
+.day-progress-row {
+    min-height: 68px;
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    border: 1px solid var(--app-outline);
+    border-radius: 14px;
+    background: var(--app-bg);
+}
+
+.progress-exercise-row.declined,
+.day-progress-row.declined {
+    border-left: 4px solid #dc2626;
+}
+
+.progress-exercise-row.improved,
+.day-progress-row.improved {
+    border-left: 4px solid #16a34a;
+}
+
+.progress-exercise-copy,
+.progress-exercise-result,
+.day-progress-row > div {
+    min-width: 0;
+}
+
+.progress-exercise-copy strong,
+.progress-exercise-copy small,
+.progress-exercise-result strong,
+.progress-exercise-result small,
+.day-progress-row strong,
+.day-progress-row small {
+    display: block;
+}
+
+.progress-exercise-copy small,
+.progress-exercise-result small,
+.day-progress-row small {
+    margin-top: 4px;
+    color: var(--app-text-soft);
+    font-size: 12px;
+}
+
+.progress-exercise-result,
+.day-progress-row > div:last-child {
+    flex: 0 0 auto;
+    text-align: right;
+}
+
+.progress-exercise-result > strong,
+.day-progress-row > div:last-child > strong {
+    font-size: 20px;
+}
+
+.day-records-header p {
+    color: var(--app-text-soft);
+}
+
 .stats-row {
     display: grid;
     grid-template-columns: 1fr 1fr;

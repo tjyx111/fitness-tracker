@@ -73,6 +73,8 @@ func main() {
 	http.HandleFunc("/api/stats/overview-history", server.handleStatsOverviewHistory)
 	http.HandleFunc("/api/stats/filtered", server.handleStatsFiltered)
 	http.HandleFunc("/api/stats/day-records", server.handleStatsDayRecords)
+	http.HandleFunc("/api/stats/progress-summary", server.handleStatsProgressSummary)
+	http.HandleFunc("/api/stats/progress-day", server.handleStatsProgressDay)
 
 	// 体重记录API路由
 	http.HandleFunc("/api/weight", server.handleWeightRecords)
@@ -133,6 +135,8 @@ func main() {
 	fmt.Println("  GET    /api/stats/frequency - 训练频率")
 	fmt.Println("  GET    /api/stats/comprehensive?days=30 - 综合统计")
 	fmt.Println("  GET    /api/stats/report?days=30 - 完整报告")
+	fmt.Println("  GET    /api/stats/progress-summary?days=30 - 周期动作综合进展")
+	fmt.Println("  GET    /api/stats/progress-day?date=2026-07-29 - 单日动作综合进展")
 	fmt.Println("")
 	fmt.Println("  Weight Records API:")
 	fmt.Println("  GET    /api/weight - 获取体重记录")

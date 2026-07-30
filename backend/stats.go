@@ -1483,10 +1483,7 @@ func recordRaw(exercise Exercise, record TrainingRecord) float64 {
 	case "reps":
 		return float64(record.Reps)
 	default:
-		if record.Weight <= 0 && record.Reps > 0 {
-			return float64(record.Reps)
-		}
-		return record.Weight * float64(record.Reps)
+		return record.Weight
 	}
 }
 

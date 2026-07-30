@@ -262,21 +262,17 @@
                 <div class="header-title">
                     <span class="header-kicker">数据洞察</span>
                     <h1>统计分析</h1>
-                    <p>查看趋势、强度与完成情况</p>
+                    <p>查看每个动作及整个周期的综合进展</p>
                 </div>
                 <div class="date-display">
                     <label>统计周期:</label>
                     <select id="stats-period">
                         <option value="7">最近7天</option>
-                        <option value="30" selected>最近30天</option>
+                        <option value="28" selected>最近28天</option>
+                        <option value="56">最近56天</option>
                         <option value="90">最近90天</option>
                         <option value="180">最近半年</option>
                         <option value="365">最近一年</option>
-                    </select>
-                    <label>指数分位:</label>
-                    <select id="stats-percentile">
-                        <option value="95" selected>P95</option>
-                        <option value="99">P99</option>
                     </select>
                 </div>
             </div>
@@ -302,8 +298,19 @@
             </div>
 
             <div class="stats-dashboard">
-                <!-- 动态加载总体统计和最佳表现 -->
+                <!-- 动态加载周期综合进展 -->
             </div>
+
+            <section id="progress-exercise-section" class="stats-section progress-exercise-section" hidden>
+                <div class="section-title-row">
+                    <div>
+                        <h2>动作综合进展</h2>
+                        <p class="section-subtitle">每个动作只展示容量与最佳表现合成后的进展百分比</p>
+                    </div>
+                    <span id="progress-exercise-count" class="todo-summary">0 个</span>
+                </div>
+                <div id="progress-exercise-list" class="progress-exercise-list"></div>
+            </section>
 
             <div id="exercise-trend-section" class="stats-section" style="display: none;">
                 <div class="section-title-row">
@@ -326,14 +333,14 @@
             </div>
 
             <div class="stats-section">
-                <h2>📋 当天明细</h2>
+                <h2>📋 当天动作进展</h2>
                 <div id="day-records" class="day-records">
-                    <p style="color: #6c757d;">点击日历中的日期查看当天明细</p>
+                    <p style="color: #6c757d;">点击有训练的日期查看当天所有动作的综合进展</p>
                 </div>
             </div>
 
             <div class="stats-actions">
-                <button class="btn btn-primary" onclick="exportStatsReport()">📥 导出统计报告</button>
+                <button class="btn btn-primary" onclick="exportStatsReport()">📥 导出进展报告</button>
                 <button class="btn btn-secondary" onclick="refreshStats()">🔄 刷新统计</button>
             </div>
         </div>
