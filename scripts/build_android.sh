@@ -51,14 +51,14 @@ if [ ! -f "$KEYSTORE_FILE" ]; then
     -keyalg RSA \
     -keysize 3072 \
     -validity 36500 \
-    -dname "CN=Fitness Tracker Android,O=Fitness Tracker"
+    -dname "CN=Assistant Android,O=Assistant"
 fi
 chmod 600 "$KEYSTORE_FILE"
 
 "$GRADLE_BIN" --no-daemon -p "$ANDROID_DIR" clean lintRelease assembleRelease
 
 SOURCE_APK="$ANDROID_DIR/app/build/outputs/apk/release/app-release.apk"
-OUTPUT_APK="$DIST_DIR/fitness-tracker.apk"
+OUTPUT_APK="$DIST_DIR/assistant.apk"
 if [ ! -f "$SOURCE_APK" ]; then
   echo "Release APK was not created: $SOURCE_APK" >&2
   exit 1

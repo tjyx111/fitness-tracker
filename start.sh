@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 健身记录应用启动脚本
+# 助手应用启动脚本
 set -euo pipefail
 
 APP_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -16,7 +16,7 @@ if [ -d ../frontend ]; then
 fi
 
 # 启动服务器
-echo "正在启动健身记录服务器..."
+echo "正在启动助手服务器..."
 echo "数据目录: ${DATA_DIR:-$(pwd)/data}"
 echo "监听地址: ${LISTEN_ADDR:-${BIND_HOST:-${HOST:-0.0.0.0}}:${PORT:-8080}}"
 echo ""

@@ -101,7 +101,9 @@ func main() {
 	http.HandleFunc("/api/reports/", server.handleReport)
 
 	// Android APK 下载
-	http.HandleFunc("/downloads/fitness-tracker.apk", apkDownloadHandler(resolveAPKPath()))
+	apkHandler := apkDownloadHandler(resolveAPKPath())
+	http.HandleFunc("/downloads/assistant.apk", apkHandler)
+	http.HandleFunc("/downloads/fitness-tracker.apk", apkHandler) // 兼容旧版下载地址
 
 	// 静态文件服务（前端）
 	http.Handle("/", http.FileServer(frontendFileSystem()))
@@ -155,7 +157,7 @@ func main() {
 	fmt.Println("  GET    /api/reports - 获取 HTML 分析报告列表")
 	fmt.Println("  GET    /api/reports/{name} - 查看 HTML 分析报告")
 	fmt.Println("  PUT    /api/reports/{name} - 上传 HTML 分析报告（Bearer token）")
-	fmt.Println("  GET    /downloads/fitness-tracker.apk - 下载 Android APK")
+	fmt.Println("  GET    /downloads/assistant.apk - 下载 Android APK")
 
 	httpServer := &http.Server{
 		Addr:              listenAddr,

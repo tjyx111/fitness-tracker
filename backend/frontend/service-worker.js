@@ -1,5 +1,5 @@
-const STATIC_CACHE = 'fitness-static-v7';
-const DATA_CACHE = 'fitness-data-v7';
+const STATIC_CACHE = 'assistant-static-v8';
+const DATA_CACHE = 'assistant-data-v8';
 const STATIC_ASSETS = [
     '/',
     '/styles.css',

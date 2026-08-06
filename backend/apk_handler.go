@@ -5,7 +5,7 @@ import (
 	"os"
 )
 
-const apkDownloadName = "fitness-tracker.apk"
+const apkDownloadName = "assistant.apk"
 
 func resolveAPKPath() string {
 	return os.Getenv("APK_FILE")

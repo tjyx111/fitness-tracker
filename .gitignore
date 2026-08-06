@@ -1,6 +1,8 @@
 # Build artifacts
 /fitness-tracker
 /backend/fitness-tracker
+/assistant
+/backend/assistant
 /dist/
 /android/.gradle/
 /android/local.properties

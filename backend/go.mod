@@ -1,4 +1,4 @@
-module fitness-tracker
+module assistant
 
 go 1.24.1
 

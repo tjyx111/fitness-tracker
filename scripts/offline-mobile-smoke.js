@@ -2,7 +2,7 @@
 
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 
-const baseURL = process.env.FITNESS_UI_URL || 'http://127.0.0.1:18088';
+const baseURL = process.env.ASSISTANT_UI_URL || process.env.FITNESS_UI_URL || 'http://127.0.0.1:18088';
 
 function assert(condition, message) {
     if (!condition) {
@@ -20,9 +20,9 @@ function assert(condition, message) {
     });
     const page = await context.newPage();
     await page.addInitScript(() => {
-        window.FitnessAndroid = {
+        window.AssistantAndroid = {
             openReminderSettings() {
-                window.__fitnessReminderOpened = true;
+                window.__assistantReminderOpened = true;
             },
             reloadApp() {
             },
@@ -37,7 +37,7 @@ function assert(condition, message) {
         const reminderButton = page.locator('#android-reminder-btn');
         assert(await reminderButton.isVisible(), 'Android reminder button is not visible');
         await reminderButton.click();
-        assert(await page.evaluate(() => window.__fitnessReminderOpened === true), 'Android reminder bridge was not called');
+        assert(await page.evaluate(() => window.__assistantReminderOpened === true), 'Android reminder bridge was not called');
 
         await page.locator('.nav-btn[data-page="todos"]').click();
         await page.waitForTimeout(300);

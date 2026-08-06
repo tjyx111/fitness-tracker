@@ -23,7 +23,7 @@ umask 077
 
 openssl req -x509 -newkey rsa:3072 -sha256 -nodes \
   -days 3653 \
-  -subj "/CN=Fitness Tracker Local CA/O=Fitness Tracker" \
+  -subj "/CN=Assistant Local CA/O=Assistant" \
   -addext "basicConstraints=critical,CA:TRUE,pathlen:0" \
   -addext "keyUsage=critical,keyCertSign,cRLSign" \
   -addext "subjectKeyIdentifier=hash" \
@@ -31,7 +31,7 @@ openssl req -x509 -newkey rsa:3072 -sha256 -nodes \
   -out "$TLS_DIR/ca.crt"
 
 openssl req -new -newkey rsa:3072 -sha256 -nodes \
-  -subj "/CN=fitness-tracker-server/O=Fitness Tracker" \
+  -subj "/CN=assistant-server/O=Assistant" \
   -addext "subjectAltName=IP:${SERVER_IP},IP:127.0.0.1,DNS:localhost" \
   -addext "keyUsage=critical,digitalSignature,keyEncipherment" \
   -addext "extendedKeyUsage=serverAuth" \
@@ -49,7 +49,7 @@ openssl x509 -req \
   -out "$TLS_DIR/server.crt"
 
 openssl req -new -newkey rsa:3072 -sha256 -nodes \
-  -subj "/CN=fitness-tracker-client/O=Fitness Tracker" \
+  -subj "/CN=assistant-client/O=Assistant" \
   -addext "keyUsage=critical,digitalSignature" \
   -addext "extendedKeyUsage=clientAuth" \
   -keyout "$TLS_DIR/client.key" \
@@ -69,7 +69,7 @@ openssl pkcs12 -export \
   -inkey "$TLS_DIR/client.key" \
   -in "$TLS_DIR/client.crt" \
   -certfile "$TLS_DIR/ca.crt" \
-  -name "Fitness Tracker Client" \
+  -name "Assistant Client" \
   -passout "file:$TLS_DIR/client-p12-password.txt" \
   -out "$TLS_DIR/client.p12"
 

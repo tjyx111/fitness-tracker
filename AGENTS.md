@@ -1,4 +1,4 @@
-# Fitness Tracker 项目说明
+# 助手项目说明（仓库 fitness-tracker）
 
 ## 启动流程
 
@@ -40,7 +40,7 @@ JUMP_TOTP_CODE="$(bash -ic 'jpcode' 2>/dev/null | tail -n 1)"
 ./package_release.sh
 ```
 
-该脚本通过 `dockerbuild.sh` 构建并测试 Linux/amd64 二进制，然后生成 `dist/fitness-tracker-linux-amd64.tar.gz`。默认还会上传发布包；仅构建本地包时使用：
+该脚本通过 `dockerbuild.sh` 构建并测试 Linux/amd64 二进制，然后生成 `dist/assistant-linux-amd64.tar.gz`。默认还会上传发布包；仅构建本地包时使用：
 
 ```bash
 SKIP_UPLOAD=1 ./package_release.sh
@@ -56,7 +56,7 @@ Android 客户端位于 `android/`，是加载当前 HTTPS 前端的 WebView 应
 ./scripts/build_android.sh
 ```
 
-签名密钥固定保存在仓库外的 `/root/.config/fitness-tracker/android/fitness-release.jks`，不得提交、打包、上传或重新生成替换。构建产物为 `dist/fitness-tracker.apk`。云端文件路径为 `/root/lbs/fitness/downloads/fitness-tracker.apk`，下载地址为 `https://111.230.63.109:19797/downloads/fitness-tracker.apk`。
+签名密钥固定保存在仓库外的 `/root/.config/fitness-tracker/android/fitness-release.jks`，不得提交、打包、上传或重新生成替换。构建产物为 `dist/assistant.apk`。云端文件路径为 `/root/lbs/fitness/downloads/assistant.apk`，下载地址为 `https://111.230.63.109:19797/downloads/assistant.apk`。
 
 Android WebView 会通过 `frontend/service-worker.js` 缓存最近成功加载的页面和 GET API 响应，离线模式仅供查看，所有写操作仍需联网。每日训练提醒默认关闭，由用户在 App 内主动设置；提醒配置会在设备重启后恢复。
 
@@ -81,7 +81,7 @@ REPORT_UPLOAD_TOKEN=... ./scripts/upload_report.sh report.htm
 将发布包解压到云主机后启动服务：
 
 ```bash
-chmod +x fitness-tracker start_cloud.sh sync_from_cloud.sh
+chmod +x assistant start_cloud.sh sync_from_cloud.sh
 ./start_cloud.sh start
 ```
 
@@ -93,7 +93,7 @@ chmod +x fitness-tracker start_cloud.sh sync_from_cloud.sh
 ./start_cloud.sh stop
 ```
 
-新云主机部署目录为 `/root/lbs/fitness`，监听 `0.0.0.0:19797`，公网地址为 `https://111.230.63.109:19797/`。云端通过 `TLS_CERT_FILE` 和 `TLS_KEY_FILE` 启用 HTTPS，不请求或校验客户端证书；证书文件位于 `/root/lbs/fitness/tls`。如部署地址变化，必须通过 `LISTEN_ADDR` 覆盖，不能为新环境继续硬编码地址。
+新云主机部署目录为 `/root/lbs/fitness`，systemd 服务为 `assistant.service`，监听 `0.0.0.0:19797`，公网地址为 `https://111.230.63.109:19797/`。云端通过 `TLS_CERT_FILE` 和 `TLS_KEY_FILE` 启用 HTTPS，不请求或校验客户端证书；证书文件位于 `/root/lbs/fitness/tls`。如部署地址变化，必须通过 `LISTEN_ADDR` 覆盖，不能为新环境继续硬编码地址。
 
 ### 从云端同步数据库到本地
 
@@ -107,6 +107,7 @@ chmod +x fitness-tracker start_cloud.sh sync_from_cloud.sh
 
 ## 关键决策
 
+- Git 仓库、源码目录、SQLite 数据库名、仓库外配置目录、Android `applicationId` 和签名身份继续使用 `fitness-tracker` 兼容命名；面向用户及发布运行的产品名、二进制、发布包、APK 和 systemd 服务使用“助手”或 `assistant`。
 - 同步接口不做应用层认证，任何能访问 `/api/sync/database` 的客户端都可以下载完整 SQLite 数据库。必须通过网络层限制访问范围，例如内网、VPN、SSH 隧道、防火墙或反向代理 ACL。
 - 当前同步方向是云端到本地的单向覆盖，不进行双向合并。同步前会备份本地数据库，但本地未上传的数据仍可能因覆盖而从工作数据库中消失。
 - 云端通过 SQLite `VACUUM INTO` 生成一致快照，以支持数据库处于 WAL 模式或服务仍在写入的场景；本地替换数据库时服务必须停止。

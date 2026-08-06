@@ -76,7 +76,7 @@ if [ "$GIT_COMMIT" = "1" ]; then
   if git diff --cached --quiet -- "$REL_DB"; then
     echo "No database changes to commit."
   else
-    git commit -m "sync fitness database $(date +%Y-%m-%dT%H:%M:%S%z)" -- "$REL_DB"
+    git commit -m "sync assistant database $(date +%Y-%m-%dT%H:%M:%S%z)" -- "$REL_DB"
     echo "Database committed to git: $REL_DB"
 
     if [ "$GIT_PUSH" = "1" ]; then

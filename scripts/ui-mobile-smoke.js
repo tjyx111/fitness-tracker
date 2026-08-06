@@ -4,8 +4,8 @@ const fs = require('fs');
 const path = require('path');
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 
-const baseURL = process.env.FITNESS_UI_URL || 'http://127.0.0.1:18088';
-const outputDir = process.env.FITNESS_UI_OUTPUT || '/tmp/fitness-ui-smoke';
+const baseURL = process.env.ASSISTANT_UI_URL || process.env.FITNESS_UI_URL || 'http://127.0.0.1:18088';
+const outputDir = process.env.ASSISTANT_UI_OUTPUT || process.env.FITNESS_UI_OUTPUT || '/tmp/assistant-ui-smoke';
 const pages = ['training', 'exercises', 'notes', 'todos', 'challenges', 'statistics', 'reports'];
 
 function assert(condition, message) {

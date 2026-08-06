@@ -615,7 +615,7 @@ func TestFilteredStatsBestPerformanceUsesRawMaxMetrics(t *testing.T) {
 		t.Fatalf("SaveExerciseGroups: %v", err)
 	}
 	if err := h.SaveTrainingData([]TrainingSession{
-		{SessionID: 1, GroupID: 1, Date: "2026-07-02", Status: "completed", DurationMinutes: 40},
+		{SessionID: 1, GroupID: 1, Date: time.Now().Format("2006-01-02"), Status: "completed", DurationMinutes: 40},
 	}, []TrainingRecord{
 		{RecordID: 1, SessionID: 1, ExerciseID: 1, SetNumber: 1, Weight: 10, Reps: 12},
 		{RecordID: 2, SessionID: 1, ExerciseID: 1, SetNumber: 2, Weight: 20, Reps: 5},

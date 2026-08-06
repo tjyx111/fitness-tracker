@@ -7,7 +7,7 @@ FRONTEND_DIR="$ROOT_DIR/frontend"
 DIST_DIR="$ROOT_DIR/dist"
 BUILD_SCRIPT="$ROOT_DIR/dockerbuild.sh"
 
-APP_NAME="${APP_NAME:-fitness-tracker}"
+APP_NAME="${APP_NAME:-assistant}"
 GOOS_TARGET="${GOOS_TARGET:-linux}"
 GOARCH_TARGET="${GOARCH_TARGET:-amd64}"
 PACKAGE_NAME="${PACKAGE_NAME:-${APP_NAME}-${GOOS_TARGET}-${GOARCH_TARGET}}"
@@ -38,8 +38,8 @@ fi
 
 echo "Building and testing in Docker..."
 if [ "${SKIP_BUILD:-0}" = "1" ]; then
-  if [ ! -x "$ROOT_DIR/fitness-tracker" ]; then
-    echo "Existing binary not found: $ROOT_DIR/fitness-tracker"
+  if [ ! -x "$ROOT_DIR/assistant" ]; then
+    echo "Existing binary not found: $ROOT_DIR/assistant"
     exit 1
   fi
   echo "Docker build skipped (SKIP_BUILD=1)"
@@ -51,11 +51,11 @@ echo "Creating package directory..."
 rm -rf "$PACKAGE_DIR"
 mkdir -p "$PACKAGE_DIR"
 
-cp "$ROOT_DIR/fitness-tracker" "$PACKAGE_DIR/$APP_NAME"
+cp "$ROOT_DIR/assistant" "$PACKAGE_DIR/$APP_NAME"
 cp "$ROOT_DIR/start_cloud.sh" "$PACKAGE_DIR/start_cloud.sh"
 cp "$ROOT_DIR/sync_from_cloud.sh" "$PACKAGE_DIR/sync_from_cloud.sh"
 mkdir -p "$PACKAGE_DIR/deploy"
-cp "$ROOT_DIR/deploy/fitness-tracker.service" "$PACKAGE_DIR/deploy/fitness-tracker.service"
+cp "$ROOT_DIR/deploy/assistant.service" "$PACKAGE_DIR/deploy/assistant.service"
 chmod +x "$PACKAGE_DIR/$APP_NAME" "$PACKAGE_DIR/start_cloud.sh" "$PACKAGE_DIR/sync_from_cloud.sh"
 
 echo "Copying data directory..."
@@ -72,13 +72,13 @@ cat > "$PACKAGE_DIR/README_DEPLOY.txt" <<EOF
 默认:
   二进制: ./$APP_NAME
   数据目录: ./data
-  日志文件: ./fitness-tracker.log
-  PID 文件: ./fitness-tracker.pid
+  日志文件: ./assistant.log
+  PID 文件: ./assistant.pid
   监听地址: 0.0.0.0:19797
   公网地址: https://111.230.63.109:19797
   TLS 目录: /root/lbs/fitness/tls
-  APK 文件: /root/lbs/fitness/downloads/fitness-tracker.apk
-  APK 下载: https://111.230.63.109:19797/downloads/fitness-tracker.apk
+  APK 文件: /root/lbs/fitness/downloads/assistant.apk
+  APK 下载: https://111.230.63.109:19797/downloads/assistant.apk
   云端不校验客户端证书
   HTML 报告目录: ./data/reports
 

@@ -38,9 +38,9 @@ public final class MainActivity extends Activity {
             + "box-shadow:0 14px 36px rgba(15,65,59,.12)}.icon{font-size:42px}h1{font-size:22px;margin:14px 0 10px}"
             + "p{color:#5f6f6c;line-height:1.6;margin:0 0 22px}button{width:100%;min-height:50px;border:0;"
             + "border-radius:15px;background:#0f766e;color:white;font-size:16px;font-weight:700}</style></head><body>"
-            + "<main class=\"card\"><div class=\"icon\">↻</div><h1>暂时无法连接 Fitness</h1>"
+            + "<main class=\"card\"><div class=\"icon\">↻</div><h1>暂时无法连接助手</h1>"
             + "<p>首次使用需要联网。成功打开一次后，断网时仍可查看最近缓存的数据。</p>"
-            + "<button onclick=\"FitnessAndroid.reloadApp()\">重新连接</button></main></body></html>";
+            + "<button onclick=\"AssistantAndroid.reloadApp()\">重新连接</button></main></body></html>";
 
     private WebView webView;
     private int pendingReminderHour = -1;
@@ -72,8 +72,10 @@ public final class MainActivity extends Activity {
                     .setCacheMode(WebSettings.LOAD_DEFAULT);
         }
 
-        webView.addJavascriptInterface(new AndroidBridge(), "FitnessAndroid");
-        webView.setWebViewClient(new FitnessWebViewClient());
+        AndroidBridge androidBridge = new AndroidBridge();
+        webView.addJavascriptInterface(androidBridge, "AssistantAndroid");
+        webView.addJavascriptInterface(androidBridge, "FitnessAndroid");
+        webView.setWebViewClient(new AssistantWebViewClient());
         ReminderScheduler.schedule(this);
         webView.loadUrl(APP_URL);
     }
@@ -98,6 +100,7 @@ public final class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         if (webView != null) {
+            webView.removeJavascriptInterface("AssistantAndroid");
             webView.removeJavascriptInterface("FitnessAndroid");
             webView.stopLoading();
             webView.destroy();
@@ -240,7 +243,7 @@ public final class MainActivity extends Activity {
         }
     }
 
-    private final class FitnessWebViewClient extends WebViewClient {
+    private final class AssistantWebViewClient extends WebViewClient {
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
             Uri uri = request.getUrl();

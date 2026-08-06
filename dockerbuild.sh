@@ -24,7 +24,7 @@ build_in_current_environment() {
     cd "$ROOT_DIR/backend"
     go test -mod=vendor ./...
     CGO_ENABLED=1 GOOS=linux GOARCH=amd64 \
-      go build -mod=vendor -buildvcs=false -o "$ROOT_DIR/fitness-tracker" .
+      go build -mod=vendor -buildvcs=false -o "$ROOT_DIR/assistant" .
   )
 }
 
@@ -47,7 +47,7 @@ case "$ACTION" in
         -e IN_DOCKER_BUILD=1 \
         "$IMAGE" ./dockerbuild.sh build
     fi
-    echo "Built: $ROOT_DIR/fitness-tracker"
+    echo "Built: $ROOT_DIR/assistant"
     ;;
   shell)
     if ! command -v docker >/dev/null 2>&1; then

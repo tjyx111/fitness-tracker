@@ -1,5 +1,5 @@
 [Unit]
-Description=Fitness Tracker
+Description=Assistant
 After=network-online.target
 Wants=network-online.target
 
@@ -9,10 +9,10 @@ WorkingDirectory=/root/lbs/fitness
 EnvironmentFile=-/root/.config/fitness-tracker/fitness-tracker.env
 Environment=DATA_DIR=/root/lbs/fitness/data
 Environment=LISTEN_ADDR=0.0.0.0:19797
-Environment=APK_FILE=/root/lbs/fitness/downloads/fitness-tracker.apk
+Environment=APK_FILE=/root/lbs/fitness/downloads/assistant.apk
 Environment=TLS_CERT_FILE=/root/lbs/fitness/tls/server.crt
 Environment=TLS_KEY_FILE=/root/lbs/fitness/tls/server.key
-ExecStart=/root/lbs/fitness/fitness-tracker
+ExecStart=/root/lbs/fitness/assistant
 Restart=on-failure
 RestartSec=3
 

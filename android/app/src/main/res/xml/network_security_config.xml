@@ -3,7 +3,7 @@
     <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
             <certificates src="system" />
-            <certificates src="@raw/fitness_ca" />
+            <certificates src="@raw/assistant_ca" />
         </trust-anchors>
     </base-config>
 </network-security-config>

@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Fitness</string>
-    <string name="tls_error">无法验证 Fitness 服务证书，请检查网络或更新应用。</string>
-    <string name="offline_title">暂时无法连接 Fitness</string>
+    <string name="app_name">助手</string>
+    <string name="tls_error">无法验证助手服务证书，请检查网络或更新应用。</string>
+    <string name="offline_title">暂时无法连接助手</string>
     <string name="offline_message">首次使用需要联网。成功打开一次后，断网时仍可查看最近缓存的数据。</string>
     <string name="offline_retry">重新连接</string>
     <string name="report_link_invalid">报告下载地址无效</string>
@@ -16,5 +16,5 @@
     <string name="reminder_cancel">取消</string>
     <string name="notification_channel_name">训练提醒</string>
     <string name="notification_title">该动一动了</string>
-    <string name="notification_text">打开 Fitness，完成今天的训练记录。</string>
+    <string name="notification_text">打开助手，完成今天的训练记录。</string>
 </resources>

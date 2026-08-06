@@ -1216,7 +1216,7 @@ async function exportStatsReport() {
         if (!response.ok) throw new Error(await response.text());
         const report = await response.json();
 
-        let csv = '\ufeffFitness 动作综合进展\n';
+        let csv = '\ufeff助手动作综合进展\n';
         csv += `统计周期,${report.startDate} 至 ${report.endDate}\n`;
         csv += `整体进展,${formatProgressPercent(report.overallProgressPercent)}\n`;
         csv += `有效覆盖,${formatNumber(report.coveragePercent || 0)}%\n\n`;
@@ -1236,7 +1236,7 @@ async function exportStatsReport() {
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = `fitness_progress_${new Date().toISOString().split('T')[0]}.csv`;
+        link.download = `assistant_progress_${new Date().toISOString().split('T')[0]}.csv`;
         link.click();
         URL.revokeObjectURL(link.href);
 

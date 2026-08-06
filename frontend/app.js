@@ -67,8 +67,9 @@ function initAppEnvironment() {
     updateConnectivity();
 
     const reminderButton = document.getElementById('android-reminder-btn');
-    const isAndroidApp = Boolean(window.FitnessAndroid
-        && typeof window.FitnessAndroid.openReminderSettings === 'function');
+    const androidBridge = getAndroidBridge();
+    const isAndroidApp = Boolean(androidBridge
+        && typeof androidBridge.openReminderSettings === 'function');
     state.isAndroidApp = isAndroidApp;
     const reportViewer = document.getElementById('report-viewer-panel');
     const reportModeHint = document.getElementById('report-mode-hint');
@@ -84,7 +85,7 @@ function initAppEnvironment() {
         reminderButton.hidden = false;
         document.body.classList.add('is-android-app');
         reminderButton.addEventListener('click', () => {
-            window.FitnessAndroid.openReminderSettings();
+            androidBridge.openReminderSettings();
         });
     }
 
@@ -93,6 +94,10 @@ function initAppEnvironment() {
             console.warn('Offline cache registration failed:', error);
         });
     }
+}
+
+function getAndroidBridge() {
+    return window.AssistantAndroid || window.FitnessAndroid || null;
 }
 
 // 导航切换
@@ -298,14 +303,15 @@ function renderReports() {
     });
     list.querySelectorAll('[data-report-download]').forEach(link => {
         link.addEventListener('click', event => {
+            const androidBridge = getAndroidBridge();
             if (!state.isAndroidApp
-                    || !window.FitnessAndroid
-                    || typeof window.FitnessAndroid.openReportInBrowser !== 'function') {
+                    || !androidBridge
+                    || typeof androidBridge.openReportInBrowser !== 'function') {
                 return;
             }
             event.preventDefault();
             const downloadURL = new URL(link.href, window.location.href);
-            window.FitnessAndroid.openReportInBrowser(downloadURL.href);
+            androidBridge.openReportInBrowser(downloadURL.href);
         });
     });
 }
